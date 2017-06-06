@@ -214,8 +214,8 @@ Plate(FthPlate, "plate", T, T, (FthPmar1, FthPmar2, FthPmar3, FthPmar4))
 #FthPlate90=Part(model, "FthPlate90")
 FthPlate90=FthPlate
 FthPmar0_90=Marker(FthPlate90, "FthPmar0_90", ref=ParaLnk24Mar2)
-#Joint(model, "Fthplate90_PataLnk24", FthPmar0_90, ParaLnk24Mar2)
-Bushing(model, "Fthplate90_PataLnk24", FthPmar0_90, ParaLnk24Mar2, (1.0e5, 1.0e5, 0), (.0, .0, 0.0), (0, 0, 0), (0, 0, 0) )
+Joint(model, "Fthplate90_PataLnk24", FthPmar0_90, ParaLnk24Mar2)
+#Bushing(model, "Fthplate90_PataLnk24", FthPmar0_90, ParaLnk24Mar2, (1.0e5, 1.0e5, 0), (.0, .0, 0.0), (0, 0, 0), (0, 0, 0) )
 FthPmar1_90=Marker(FthPlate90, "FthPmar1_90", (effDist, 0, 0),  ref=FthPmar0_90)
 FthPmar1d_90=Marker(FthPlate90, "FthPmar1d_90", ref=lm12.distalmarBack)
 Joint(model, "Fthplate90_lm12_disk2", FthPmar1d_90, lm12.distalmarBack)
@@ -233,18 +233,18 @@ Rn=R/2
 dln=dl/2
 drn=dr/2
 Ln=L/2
-RotDiskJ4=Part(model, "RotDiskJ4")
-Mar2DiskJ4I=Marker(RotDiskJ4, "Mar2DiskJ4I", (0,0,basesize/8), ref=cen_mar)
-FthPlate2DiskI=Marker(FthPlate, "FthPlate2DiskI", (0,0,basesize/8), ref=cen_mar)
-Cylinder(RotDiskJ4, "cyn", Rn, T/2, Mar2DiskJ4I)
-alpha=np.arctan2(Rn, Ln+dln-drn)/d2r
-lm13_alpha12=(a12(-drn, Rn)-a12(0, Rn))/d2r
-lm13_shift1=55
-lm13_shift2=110
-lm13_FrameAngle=-lm13_shift1+lm13_alpha12	
-mar1_13=Marker(FthPlate, "mar1_13", (0,0,0), (0,0, -lm13_FrameAngle), ref=FthPlate2DiskI)
-mar1_disk=Marker(RotDiskJ4, "mar1_disk", ref=mar1_13)
-lm13=SliderMechanismLean(model, "SLM13", dln, drn, Ln, Rn, mar1_13, 0, lm13_shift1, lm13_shift2, RotDiskJ4)
+#RotDiskJ4=Part(model, "RotDiskJ4")
+#Mar2DiskJ4I=Marker(RotDiskJ4, "Mar2DiskJ4I", (0,0,basesize/8), ref=cen_mar)
+#FthPlate2DiskI=Marker(FthPlate, "FthPlate2DiskI", (0,0,basesize/8), ref=cen_mar)
+#Cylinder(RotDiskJ4, "cyn", Rn, T/2, Mar2DiskJ4I)
+#alpha=np.arctan2(Rn, Ln+dln-drn)/d2r
+#lm13_alpha12=(a12(-drn, Rn)-a12(0, Rn))/d2r
+#lm13_shift1=55
+#lm13_shift2=110
+#lm13_FrameAngle=-lm13_shift1+lm13_alpha12	
+#mar1_13=Marker(FthPlate, "mar1_13", (0,0,0), (0,0, -lm13_FrameAngle), ref=FthPlate2DiskI)
+#mar1_disk=Marker(RotDiskJ4, "mar1_disk", ref=mar1_13)
+#lm13=SliderMechanismLean(model, "SLM13", dln, drn, Ln, Rn, mar1_13, 0, lm13_shift1, lm13_shift2, RotDiskJ4)
 
 cmd="c:\\MSC.Software\\Adams\\2016\\common\\mdi.bat aview ru-s i e"
 simcmd="simulation single trans type= static initial_static=no end_time=5 number_of_steps=50"

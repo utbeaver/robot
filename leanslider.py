@@ -56,7 +56,7 @@ class SliderMechanismLean(SliderJoint):
   	brace2disk=Marker(self.Brace, "brace2disk", pos=(L_+dl_-dr_, R_, -self.zOriSym,), orientation=(0,0,0), ref=basemar)
         revJoint2=Joint(self, "RevJ2", self.mar2, brace2disk)
         baseMarkerII=Marker(self.part2, "baseMarkerII", pos=(0,0,0), orientation=(0,0,0), ref=self.mar2)
-  	Cylinder(self.part2, "disk", R_, T, Marker(self.part2, "Cyn_mar", (0,0,-T/2), ref=self.mar2))
+  	#Cylinder(self.part2, "disk", R_, T, Marker(self.part2, "Cyn_mar", (0,0,-T/2), ref=self.mar2))
 
 	#slider
 	slider=Part(self, "slider")
@@ -112,7 +112,8 @@ class SliderMechanismLean(SliderJoint):
 	self.distalmarBack=Marker(self.part2, "distalmarBack", (L_, 0, 0), (0,0,0), ref=self.shiftedmarBack)
 	rot2=Variable(self, "rot2", "AZ(%s, %s)*RTOD"%(self.shiftedmarBack.name(), self.mar1.name()))
 	Link(self.part2, "link1", T, T, self.shiftedmarBack, self.distalmarBack) 
-
+	linkXdisk=Marker(self.part2, "linkXdisk", (R_, 0, 0), (0,0,0), ref=self.shiftedmarBack)
+	Plate(self.part2, "triangle", T, T, (self.mar2, disk22link2, linkXdisk)) 
 	self.shiftedmarFront=Marker(self.part2, "shiftedmarFront", (0, 0, 1.1*braceH), ref=self.shiftedmarBack)
 	self.distalmarFront=Marker(self.part2, "distalmarFront", (0, 0, 1.1*braceH), ref=self.distalmarBack)
 	#print 1.1*braceH
@@ -139,10 +140,8 @@ if __name__ == "__main__":
   ground=model.ground()
 
   mar1=Marker(ground, "ground_marker", (0,0,0), (0, 0, alpha1))
-  disk1=Part(model, "Dddd")
-  mar1_disk1=Marker(disk1, "cyn_marker", (0,0,0), (0, 0, alpha1))
-  p1_disk=Cylinder(disk1, "cyn1",  R, 0.1*R, Marker(disk1, "toDisk", (0,0,-0.05*R), ref=mar1_disk1)) 
-  slider=SliderMechanismLean(model, "SLM", dl, dr, L, R, mar1, alpha1,shift1=55, shift2=110, Disk=disk1)
+  p1_disk=Cylinder(ground, "cyn1",  R, 0.1*R, Marker(ground, "toDisk", (0,0,-0.05*R), ref=mar1)) 
+  slider=SliderMechanismLean(model, "SLM", dl, dr, L, R, mar1, alpha1,shift1=55, shift2=110)
 
 
   lines=model.commands([])
