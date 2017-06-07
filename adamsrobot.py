@@ -11,13 +11,19 @@ alpha3=45
 alpha4=45
 scale=1.0
 gr=0.618
-basesize=2*scale
+
+basesize=200*scale
 conR=basesize/10
 halfsize=basesize/2
 effDist=basesize-2*conR
 
+R=basesize-2*conR
+dl=1.3448*R
+dr=0.9*R
+ll=np.sqrt(400*400.0-R*R)
+L=ll-(dl-dr)
 
-model=Model("Robot", mm="meter", mass="kg", force="newton", icon_size=0.2)
+model=Model("Robot", mm="mm", mass="kg", force="newton", icon_size=0.2)
 ground=model.ground()
 BaseMarker=Marker(ground, "RobotBase", pos=zero3, orientation=(0,-90,0))
 tempL=(effDist)*gr+conR
@@ -55,12 +61,8 @@ Cylinder(rotBase, "cynBR", conR/2, basesize-2*T*3, ref=braceBR)
 braceBU=Marker(rotBase, "braceBU", (_3pts[1][0], _3pts[1][1], 0), (0, 0, -alpha1), ref=braceMarkerB) 
 braceBL=Marker(rotBase, "braceBL", (_3pts[2][0], _3pts[2][1], 0), (0, 0, 0), ref=braceMarkerB) 
 
-R=basesize/2
 disk1_mar=Marker(rotBase, "disk_cne_mar", (basesize/2-conR, 0, 0.45*R), (0, 0, 90-alpha1), ref=z2you)
-disk1=Cylinder(rotBase, "disk1", R, 0.1*R, Marker(rotBase, "disk_mar", (0, 0, -0.05*R), ref=disk1_mar))
-dl=1.3448*R
-dr=0.9*R
-L=5*R
+#disk1=Cylinder(rotBase, "disk1", R, 0.1*R, Marker(rotBase, "disk_mar", (0, 0, -0.05*R), ref=disk1_mar))
 lm11=SliderMechanismLean(model, "SLM11", dl, dr, L, R, disk1_mar, 90-alpha1, 45, 89.9)
 angleAlignedLine=lm11.FrameAngle
 angleFromAbligned=lm11.Disk2AngleFromAligned
@@ -76,7 +78,6 @@ Link(ParaLnk11, "link", T, T, ParaLnk11MarI, ParaMar2)
 
 ParaLnk12=Part(model, "ParaLnk12")
 ang=(180-alpha1+90)*d2r
-print ang/d2r
 pos=((effDist)/2+(effDist)*np.cos(ang), (effDist)*np.sin(ang), -halfsize+2*T*1.3-2*T/2-T/2)
 braceToLnk2Mar=Marker(rotBase, "braceToLnk2Mar", pos, (0, 0, angleAlignedFromLevel)) 
 Lnk2ToBrace=Marker(ParaLnk12, "Lkn2ToBrace", pos, (0, 0, angleAlignedFromLevel)) 
@@ -151,9 +152,9 @@ Joint(model, "part2_plate2_90", lm11.distalmarBack, secPmar1_90_pair)
 sndPmar2For2ndSlider=Marker(secondPlate, "sndPmar2For2ndSlider", (0,0,0),(0,0,alpha3),  ref=sndPmar2)
 sndPmar1For2ndSlider=Marker(secondPlate, "sndPmar1For2ndSlider", (0,0,0),(0,0,alpha3),  ref=sndPmar1)
 disk2_mar=Marker(secondPlate, "disk2_cen_mar", (0,0,-(T+halfsize*0)),  ref=sndPmar2For2ndSlider)
-Cylinder(secondPlate, "disk2", R, 0.1*R, Marker(secondPlate, "disk_mar", (0, 0, -0.05*R), ref=disk2_mar))
+#Cylinder(secondPlate, "disk2", R, 0.1*R, Marker(secondPlate, "disk_mar", (0, 0, -0.05*R), ref=disk2_mar))
 
-lm12=SliderMechanismLean(model, "SLM12", dl, dr, L, R, disk2_mar, 90-alpha3, 45, 90)
+lm12=SliderMechanismLean(model, "SLM12", dl, dr, L, R, disk2_mar, 90-alpha3, 45, 89.9)
 
 angleAlignedLine2=lm12.FrameAngle
 angleFromAbligned2=lm12.Disk2AngleFromAligned

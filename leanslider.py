@@ -19,7 +19,7 @@ class SliderJoint(entity):
 
 
 class SliderMechanismLean(SliderJoint):
-    def __init__(self, parent, Name, dl_, dr_, L_, R_,  mar1, alpha1=0, shift1=0, shift2=0, Disk=None):
+    def __init__(self, parent, Name, dl_, dr_, L_, R_,  mar1, alpha1=0, shift1=0, shift2=0):
 	SliderJoint.__init__(self, parent, Name, dl_, dr_, L_, R_, mar1)
 	r=0.1*R_
 	T=0.1*R_
@@ -29,19 +29,16 @@ class SliderMechanismLean(SliderJoint):
         	
 	self.FrameAngle=-shift1+alpha12	
 	self.AlignedLineAngle_Gnd=alpha12-shift1-alpha
-	if Disk is None:
-            baseMarkerI=Marker(self.mar1.parent(), "baseMarkerI", pos=(0,0,0), orientation=(0,0,self.AlignedLineAngle_Gnd), ref=self.mar1)
-	    self.Brace=Part(self, "Brace")
-            basemar=Marker(self.Brace, "basemarker",  (0,0,0), (0,0,0), baseMarkerI)
-	else:	
-            baseMarkerI=Marker(Disk, "baseMarkerI", pos=(0,0,0), orientation=(0,0,self.AlignedLineAngle_Gnd), ref=self.mar1)
-	    self.Brace=self.mar1.parent()
-            basemar=Marker(self.Brace, "basemarker",  (0,0,0), (0,0,self.AlignedLineAngle_Gnd), self.mar1)
+        baseMarkerI=Marker(self.mar1.parent(), "baseMarkerI", pos=(0,0,0), orientation=(0,0,self.AlignedLineAngle_Gnd), ref=self.mar1)
+	self.Brace=Part(self, "Brace")
+        basemar=Marker(self.Brace, "basemarker",  (0,0,0), (0,0,0), baseMarkerI)
         revJoint1=Joint(self, "RevJ", basemar, baseMarkerI)
 	zOri=0
 	zBrace=T/2+braceH/2
 	self.zOriSym=T+braceH
         self.mar1alignedwithmar2=Marker(self.Brace, "basemaralignedwithmar2",  (0,0,0), (0,0,alpha), basemar)  
+
+
 	rot1=Variable(self, "rot1", "AZ(%s, %s)*RTOD"%(self.mar1alignedwithmar2.name(), self.mar1.name()))
   	self.mar2alignedwithmar1=   Marker(self.Brace, "mar2alignedwithmar1", pos=(L_+dl_-dr_, R_, -self.zOriSym), orientation=(0,0,alpha), ref=basemar)
 	braceGeoMar=Marker(self.Brace, "braceGeoMar", (r+L_+dl_-dr_, r+braceH/2, -zBrace), (90, -90, -90), ref=basemar)
@@ -84,11 +81,12 @@ class SliderMechanismLean(SliderJoint):
         link12slider=Marker(link1, "toSlider",   ref=slider2link1) 
         pos=(-R_*0.866, R_*0.5, 0)
         link12disk1=Marker(link1, "todisk1",  pos,  ref=basemar) 
-	if Disk is None:
-	    disk12link1=Marker(self.mar1.parent(), "tolink1", pos, ref=baseMarkerI)
-        else:    
-	    disk12link1=Marker(Disk, "tolink1", pos, ref=baseMarkerI)
+	disk12link1=Marker(self.mar1.parent(), "tolink1", pos, ref=baseMarkerI)
         Link(link1, "link", T, T, link12slider, link12disk1)
+
+        self.mar1alignedwithmar2_gnd=Marker(self.mar1.parent(), "basemaralignedwithmar2_gnd",  (0,0,0), (0,0,alpha), baseMarkerI)  
+	mar1_R=Marker(self.mar1.parent(), "mar1_R", (-R_, 0, 0), ref=mar1)
+	Plate(self.mar1.parent(), "triangle", T, T, (self.mar1alignedwithmar2_gnd, disk12link1, mar1_R)) 
 
 	JntSliderLnk1=Joint(self, "Jslider_link1", slider2link1, link12slider)
 	JntDisk1Lnk1=Joint(self, "Jdisk1_link1", link12disk1,  disk12link1)
@@ -119,11 +117,7 @@ class SliderMechanismLean(SliderJoint):
 	#print 1.1*braceH
 	Link(self.part2, "link2", T, T, self.shiftedmarFront, self.distalmarFront) 
 	Variable(self, "disk2_rot", "AZ(%s, %s)*RTOD"%(self.shiftedmarFront.name(), self.mar2alignedwithmar1.name())) 
-	if Disk is not None:
-	    mar1_disk1=Marker(Disk, "mar1_disk1", ref=self.mar1)
-	    Variable(self, "disk1_rot", "AZ(%s, %s)*RTOD"%(mar1_disk1.name(), self.mar1alignedwithmar2.name())) 
-        else:    
-	    Variable(self, "disk1_rot", "AZ(%s, %s)*RTOD"%(self.mar1.name(), self.mar1alignedwithmar2.name())) 
+	Variable(self, "disk1_rot", "AZ(%s, %s)*RTOD"%(self.mar1.name(), self.mar1alignedwithmar2.name())) 
 
 
 
@@ -140,7 +134,7 @@ if __name__ == "__main__":
   ground=model.ground()
 
   mar1=Marker(ground, "ground_marker", (0,0,0), (0, 0, alpha1))
-  p1_disk=Cylinder(ground, "cyn1",  R, 0.1*R, Marker(ground, "toDisk", (0,0,-0.05*R), ref=mar1)) 
+  #p1_disk=Cylinder(ground, "cyn1",  R, 0.1*R, Marker(ground, "toDisk", (0,0,-0.05*R), ref=mar1)) 
   slider=SliderMechanismLean(model, "SLM", dl, dr, L, R, mar1, alpha1,shift1=55, shift2=110)
 
 
