@@ -12,7 +12,7 @@ alpha4=45
 scale=1.0
 gr=0.618
 
-basesize=200*scale
+basesize=150*scale
 conR=basesize/10
 halfsize=basesize/2
 effDist=basesize-2*conR
@@ -22,8 +22,7 @@ dl=1.3448*R
 dr=0.9*R
 ll=np.sqrt(400*400.0-R*R)
 L=ll-(dl-dr)
-
-model=Model("Robot", mm="mm", mass="kg", force="newton", icon_size=0.2)
+model=Model("Robot", mm="mm", mass="kg", force="newton", icon_size=10)
 ground=model.ground()
 BaseMarker=Marker(ground, "RobotBase", pos=zero3, orientation=(0,-90,0))
 tempL=(effDist)*gr+conR
@@ -110,7 +109,7 @@ secondPlate=Part(model, "secondPlate")
 sndPmar1=Marker(secondPlate, "sndPmar1", (0,0,0), ( 0,0,-angleAlignedFromLevel-angleFromAbligned), ref=ParaLnk13MarJ)
 sndPmar3=Marker(secondPlate, "sndPmar3", (0,-(effDist),0),  ref=sndPmar1)
 sndPmar2=Marker(secondPlate, "sndPmar2", ((effDist)*np.cos(alpha3*d2r),-(effDist)*np.cos(alpha3*d2r), 0),  ref=sndPmar1)
-Cylinder(secondPlate, "Cyn", 0.1*R, T+halfsize, Marker(secondPlate, "cynMar", (0,0,-(T+halfsize)), ref=sndPmar2))
+Cylinder(secondPlate, "Cyn", 0.1*R, T+R, Marker(secondPlate, "cynMar", (0,0,-(T+R)), ref=sndPmar2))
 Plate(secondPlate, "plate", T, T, (sndPmar1, sndPmar2, sndPmar3))
 Joint(model, "paraLink3_2ndPlate", sndPmar1, ParaLnk13MarJ)
 sndPmar3_dup=Marker(secondPlate, "sndPmar3_dup", ref=lm11.distalmarFront)
@@ -224,28 +223,37 @@ FthPmar2_90=Marker(FthPlate90, "FthPmar2_90", (effDist/2, 0, 0),  ref=FthPmar1_9
 FthPmar3_90=Marker(FthPlate90, "FthPmar3_90", (0, effDist, 0),  ref=FthPmar2_90)
 Plate(FthPlate90, "plate90", T, T, (FthPmar0_90, FthPmar1_90, FthPmar2_90, FthPmar3_90)) 
 
-cen_mar=Marker(FthPlate90, "center_mar", (0, effDist/2, -basesize/4), ref=FthPmar3)
-cyn_mar=Marker(FthPlate90, "Cylinder_mar", (0, effDist/2, -basesize/2), ref=FthPmar3)
-Cylinder(FthPlate90, "cyn", T, basesize/2, cyn_mar)
-box_corner=Marker(FthPlate90, "plateCorner", (0,0,0), (90,90,-90),ref=FthPmar3)
-Box(FthPlate90, "FacePlate", basesize/2, effDist, T, box_corner)
+cen_mar=Marker(FthPlate90, "center_mar", (effDist+T/2, effDist/2, -R/2), (0,-90,0), ref=FthPmar3)
+cyn_mar=Marker(FthPlate90, "Cylinder_mar", (effDist+T/2, effDist/2*0, -R/2), (0,-90,0), ref=FthPmar3)
+Cylinder(FthPlate90, "cyn", T, effDist, cyn_mar)
+#box_corner=Marker(FthPlate90, "plateCorner", (0,0,0), (90,90,-90),ref=FthPmar3)
+#Box(FthPlate90, "FacePlate", R, effDist, T, box_corner)
+UpPlate_mar1=Marker(FthPlate90, "UpPlate_mar1", (0,0,0), (0, -90, 0), ref=FthPmar4)
+UpPlate_mar2=Marker(FthPlate90, "UpPlate_mar2", (0,0,effDist), (0, 0, 0), ref=cyn_mar)
+UpPlate_mar3=Marker(FthPlate90, "UpPlate_mar3", (0,0,0), (0, -90, 0), ref=FthPmar3_90)
+Plate(FthPlate90, "plateUp", T, T, (UpPlate_mar1, UpPlate_mar2, UpPlate_mar3)) 
+DnPlate_mar1=Marker(FthPlate90, "DnPlate_mar1", (0,0,0), (0, -90, 0), ref=FthPmar3)
+DnPlate_mar2=Marker(FthPlate90, "DnPlate_mar2", (0,0,effDist), (0, 0, 0), ref=cyn_mar)
+DnPlate_mar3=Marker(FthPlate90, "DnPlate_mar3", (0,0,0), (0, -90, 0), ref=FthPmar2_90)
+Plate(FthPlate90, "plateDn", T, T, (DnPlate_mar1, DnPlate_mar2, DnPlate_mar3)) 
 
-Rn=R/2
-dln=dl/2
-drn=dr/2
+Rn=R*0.8
+dln=dl*0.8
+drn=dr*0.8
 Ln=L/2
 #RotDiskJ4=Part(model, "RotDiskJ4")
 #Mar2DiskJ4I=Marker(RotDiskJ4, "Mar2DiskJ4I", (0,0,basesize/8), ref=cen_mar)
 #FthPlate2DiskI=Marker(FthPlate, "FthPlate2DiskI", (0,0,basesize/8), ref=cen_mar)
-#Cylinder(RotDiskJ4, "cyn", Rn, T/2, Mar2DiskJ4I)
+#Cylinder(FthPlate90, "cyn", Rn, T/2, Mar2DiskJ4I)
 #alpha=np.arctan2(Rn, Ln+dln-drn)/d2r
-#lm13_alpha12=(a12(-drn, Rn)-a12(0, Rn))/d2r
-#lm13_shift1=55
-#lm13_shift2=110
-#lm13_FrameAngle=-lm13_shift1+lm13_alpha12	
+lm13_alpha12=(a12(-drn, Rn)-a12(0, Rn))/d2r
+lm13_shift1=55
+lm13_shift2=110
+lm13_FrameAngle=-lm13_shift1+lm13_alpha12	
 #mar1_13=Marker(FthPlate, "mar1_13", (0,0,0), (0,0, -lm13_FrameAngle), ref=FthPlate2DiskI)
 #mar1_disk=Marker(RotDiskJ4, "mar1_disk", ref=mar1_13)
-#lm13=SliderMechanismLean(model, "SLM13", dln, drn, Ln, Rn, mar1_13, 0, lm13_shift1, lm13_shift2, RotDiskJ4)
+lm13_basemar=Marker(FthPlate90, "lm13_basemar", (0, 0, effDist/4*3), ref=cyn_mar)
+lm13=SliderMechanismLean(model, "SLM13", dln, drn, Ln, Rn, lm13_basemar, 0, lm13_shift1, lm13_shift2, 0.3)
 
 cmd="c:\\MSC.Software\\Adams\\2016\\common\\mdi.bat aview ru-s i e"
 simcmd="simulation single trans type= static initial_static=no end_time=5 number_of_steps=50"

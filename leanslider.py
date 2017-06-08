@@ -19,7 +19,7 @@ class SliderJoint(entity):
 
 
 class SliderMechanismLean(SliderJoint):
-    def __init__(self, parent, Name, dl_, dr_, L_, R_,  mar1, alpha1=0, shift1=0, shift2=0):
+    def __init__(self, parent, Name, dl_, dr_, L_, R_,  mar1, alpha1=0, shift1=0, shift2=0, sndScale=1.0):
 	SliderJoint.__init__(self, parent, Name, dl_, dr_, L_, R_, mar1)
 	r=0.1*R_
 	T=0.1*R_
@@ -107,7 +107,7 @@ class SliderMechanismLean(SliderJoint):
 	#restore the aligned line to the zero0 and start from there
 	self.Disk2AngleFromAligned=(shift1-alpha1)+(alpha34-shift2)
 	self.shiftedmarBack=Marker(self.part2, "shiftedmarBack", (0,0,0), (0, 0, self.Disk2AngleFromAligned), ref=self.mar2alignedwithmar1) 
-	self.distalmarBack=Marker(self.part2, "distalmarBack", (L_, 0, 0), (0,0,0), ref=self.shiftedmarBack)
+	self.distalmarBack=Marker(self.part2, "distalmarBack", (L_*sndScale, 0, 0), (0,0,0), ref=self.shiftedmarBack)
 	rot2=Variable(self, "rot2", "AZ(%s, %s)*RTOD"%(self.shiftedmarBack.name(), self.mar1.name()))
 	Link(self.part2, "link1", T, T, self.shiftedmarBack, self.distalmarBack) 
 	linkXdisk=Marker(self.part2, "linkXdisk", (R_, 0, 0), (0,0,0), ref=self.shiftedmarBack)
