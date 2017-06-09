@@ -19,7 +19,7 @@ class SliderJoint(entity):
 
 
 class SliderMechanismLean(SliderJoint):
-    def __init__(self, parent, Name, dl_, dr_, L_, R_,  mar1, alpha1=0, shift1=0, shift2=0, sndScale=1.0):
+    def __init__(self, parent, Name, dl_, dr_, L_, R_,  mar1, alpha1=0, shift1=0, shift2=0, sndScale=1.0, quad=0, _motion=1):
 	SliderJoint.__init__(self, parent, Name, dl_, dr_, L_, R_, mar1)
 	r=0.1*R_
 	T=0.1*R_
@@ -73,9 +73,14 @@ class SliderMechanismLean(SliderJoint):
 	Extrusion(slider, "sliderblock2", pnts, T/2, braceH, "RED",  slider2link2)
 
         transJ=Joint(self, "SliderJoint", sliderI, sliderJ, "translational")
-	motionFunc=Variable(self, "motionFunc",  "%f+sin(time/5*(PI/2))*%f"%(-dr_, dl_+dr_))
+	#motionFunc=Variable(self, "motionFunc",  "%f*sin(time/5*(PI/2)/2)"%(dl_-dr_))
+	motionFunc=Variable(self, "motionFunc",  "%f+sin(time/5*PI-PI/2)*%f"%((dl_-dr_)/2, (dl_+dr_)/2*_motion))
         motion=Motion123(self, "sliderMotion", sliderI, sliderJ, 'z', "VARVAL(%s)"%motionFunc.name()) 
         #motion=Motion123(self, "sliderMotion", sliderI, sliderJ, 'z', "0") 
+
+	Variable(self, "Act_forceX", "JOINT(%s, 0, 2, %s)"%(transJ.name(), sliderJ.name()))
+	Variable(self, "Act_forceY", "JOINT(%s, 0, 3, %s)"%(transJ.name(), sliderJ.name()))
+	Variable(self, "Act_forceZ", "MOTION(%s, 0, 4, %s)"%(motion.name(), sliderJ.name()))
 
         link1=Part(self, "Link1")
         link12slider=Marker(link1, "toSlider",   ref=slider2link1) 
@@ -107,11 +112,29 @@ class SliderMechanismLean(SliderJoint):
 	#restore the aligned line to the zero0 and start from there
 	self.Disk2AngleFromAligned=(shift1-alpha1)+(alpha34-shift2)
 	self.shiftedmarBack=Marker(self.part2, "shiftedmarBack", (0,0,0), (0, 0, self.Disk2AngleFromAligned), ref=self.mar2alignedwithmar1) 
-	self.distalmarBack=Marker(self.part2, "distalmarBack", (L_*sndScale, 0, 0), (0,0,0), ref=self.shiftedmarBack)
+	if quad==0:
+	   ll=L_*sndScale	
+        else:   
+	   ll=min(R_/2, L_*sndScale)	
+	self.distalmarBack=Marker(self.part2, "distalmarBack", (ll*sndScale, 0, 0), (0,0,0), ref=self.shiftedmarBack)
 	rot2=Variable(self, "rot2", "AZ(%s, %s)*RTOD"%(self.shiftedmarBack.name(), self.mar1.name()))
 	Link(self.part2, "link1", T, T, self.shiftedmarBack, self.distalmarBack) 
-	linkXdisk=Marker(self.part2, "linkXdisk", (R_, 0, 0), (0,0,0), ref=self.shiftedmarBack)
-	Plate(self.part2, "triangle", T, T, (self.mar2, disk22link2, linkXdisk)) 
+	linkXdisk=Marker(self.part2, "linkXdisk", (ll, 0, 0), (0,0,0), ref=self.shiftedmarBack)
+	p2=self.part2
+	if quad==1:
+	    linkXdisk1=Marker(self.part2, "linkXdisk1", (0, -R_, 0), (0,0,0), ref=linkXdisk)
+	    Plate(self.part2, "triangleDn", T, T, (self.mar2, disk22link2, linkXdisk1, linkXdisk)) 
+	    Plate(self.part2, "triangleUp", T, T, (Marker(p2, "upmar2", (0,0, braceH), ref=self.mar2), 
+		    Marker(p2, "upmar3", (0,0,braceH), ref=disk22link2), 
+		    Marker(p2, "upmar4", (0,0,braceH), ref=linkXdisk1), 
+		    Marker(p2, "upmar1", (0,0,braceH), ref=linkXdisk))) 
+	    Cylinder(p2, "Cyn1", T, braceH, ref=linkXdisk1)
+	    Cylinder(p2, "Cyn2", T, braceH, ref=linkXdisk)
+	    axis_mar=Marker(p2, "axis_joint", (0, 0, braceH/2), (0, -90, 0), ref=linkXdisk1)
+	    Cylinder(p2, "Cyn3", T, R_, ref=axis_mar)
+	    self.for_next_joint=Marker(p2, "fornextJ", (0, 0, R_*0.2), (0, 180, 0), ref=axis_mar)
+        else:    
+	    Plate(self.part2, "triangle", T, T, (self.mar2, disk22link2, linkXdisk)) 
 	self.shiftedmarFront=Marker(self.part2, "shiftedmarFront", (0, 0, 1.1*braceH), ref=self.shiftedmarBack)
 	self.distalmarFront=Marker(self.part2, "distalmarFront", (0, 0, 1.1*braceH), ref=self.distalmarBack)
 	#print 1.1*braceH
