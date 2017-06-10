@@ -713,16 +713,25 @@ class Motion123(Connector):
 
 
 class Joint(Connector):  
-  def __init__(self, parent, Name, marI, marJ, _type="revolute", _jprim=False):    
+  def __init__(self, parent, Name, marI, marJ, _type="revolute", _jprim=False, motion=None):    
     Connector.__init__(self, parent, Name, marI, marJ, _type)      
     self.jprim=_jprim
+    self.motion=motion
+    if self.motion is not None:
+      self.motionN="%s_motion"%self.name()	    
 
   def toAdams(self):    
     if self.jprim == False:        
       line = "constraint create joint %s joint_name=%s i_marker_name=%s j_marker_name=%s"%(self.type(), self.name(), self.I().name(), self.J().name())
+      if self.motion is not None:
+          line=line+'\nconstraint create motion_generator motion_name=%s type_of_freedom=%s joint_name=%s  function="%s"'%(self.motionN, self.type(), self.name(), self.motion)	      
     else:  
       line = "constraint create primitive_joint %s jprim_name=%s i_marker_name=%s j_marker_name=%s"%(self.type(), self.name(), self.I().name(), self.J().name())
     self._lines.append(line)
+
+  def motionName(self):  
+    return self.motionN	  
+   	  
 
 
 class SPDPT(Connector):

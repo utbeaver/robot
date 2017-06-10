@@ -11,7 +11,7 @@ alpha3=45
 alpha4=45
 scale=1.0
 gr=0.618
-_motion=(1,1,0,0)
+_motion=(1,1,0,1)
 basesize=150*scale
 conR=basesize/10
 halfsize=basesize/2
@@ -20,7 +20,7 @@ effDist=basesize-2*conR
 R=basesize-2*conR
 dl=1.3448*R
 dr=0.9*R
-ll=np.sqrt(400*400.0-R*R)
+ll=np.sqrt(500*500.0-R*R)
 L=ll-(dl-dr)
 model=Model("Robot", mm="mm", mass="kg", force="newton", icon_size=10)
 ground=model.ground()
@@ -46,6 +46,7 @@ pns=pns+[(_3pts[0][0]+conR*np.cos(i), _3pts[0][1]+conR*np.sin(i)) for i in np.ra
 pns=pns+[(_3pts[1][0]+conR*np.cos(i), _3pts[1][1]+conR*np.sin(i)) for i in np.radians(np.linspace(alpha1, beta1+90,10))]
 pns=pns+[(_3pts[2][0]+conR*np.cos(i), _3pts[2][1]+conR*np.sin(i)) for i in np.radians(np.linspace(beta1+90, 180,5))]
 T=basesize/20
+print T
 TT=2*T
 braceMarkerF=Marker(rotBase, "braceF", (0, 0, halfsize-2*T*1.5), (0,0,0), ref=z2you)
 Extrusion(rotBase, "braceFront", pns, -2*T/2, 2*T, "RED", braceMarkerF)
@@ -62,7 +63,8 @@ braceBL=Marker(rotBase, "braceBL", (_3pts[2][0], _3pts[2][1], 0), (0, 0, 0), ref
 
 disk1_mar=Marker(rotBase, "disk_cne_mar", (basesize/2-conR, 0, 0.45*R), (0, 0, 90-alpha1), ref=z2you)
 #disk1=Cylinder(rotBase, "disk1", R, 0.1*R, Marker(rotBase, "disk_mar", (0, 0, -0.05*R), ref=disk1_mar))
-lm11=SliderMechanismLean(model, "SLM11", dl, dr, L, R, disk1_mar, 90-alpha1, 45, 89.9, _motion=_motion[0])
+print R
+lm11=SliderMechanismLean(model, "SLM11", dl, dr, L, L, R, disk1_mar, 90-alpha1, 45, 89.9, _motion=_motion[0])
 angleAlignedLine=lm11.FrameAngle
 angleFromAbligned=lm11.Disk2AngleFromAligned
 angleAlignedFromLevel=90-alpha1+angleAlignedLine
@@ -153,7 +155,7 @@ sndPmar1For2ndSlider=Marker(secondPlate, "sndPmar1For2ndSlider", (0,0,0),(0,0,al
 disk2_mar=Marker(secondPlate, "disk2_cen_mar", (0,0,-(T+halfsize*0)),  ref=sndPmar2For2ndSlider)
 #Cylinder(secondPlate, "disk2", R, 0.1*R, Marker(secondPlate, "disk_mar", (0, 0, -0.05*R), ref=disk2_mar))
 
-lm12=SliderMechanismLean(model, "SLM12", dl, dr, L, R, disk2_mar, 90-alpha3, 45, 89.9, _motion=_motion[1])
+lm12=SliderMechanismLean(model, "SLM12", dl, dr, L, L, R, disk2_mar, 90-alpha3, 45, 89.9, _motion=_motion[1])
 
 angleAlignedLine2=lm12.FrameAngle
 angleFromAbligned2=lm12.Disk2AngleFromAligned
@@ -254,7 +256,7 @@ lm13_FrameAngle=-lm13_shift1+lm13_alpha12
 #mar1_disk=Marker(RotDiskJ4, "mar1_disk", ref=mar1_13)
 #lm13_basemar=Marker(FthPlate90, "lm13_basemar", (0, 0, effDist/4*3), ref=cyn_mar)
 lm13_basemar=Marker(FthPlate90, "lm13_basemar", (0, 0, effDist/4*3), ref=cyn_mar)
-lm13=SliderMechanismLean(model, "SLM13", dln, drn, Ln, Rn, lm13_basemar, 0, lm13_shift1, lm13_shift2, 0.3, 1, _motion=_motion[2])
+lm13=SliderMechanismLean(model, "SLM13", dln, drn, Ln, Ln*0.3, Rn, lm13_basemar, 0, lm13_shift1, lm13_shift2, 1, _motion=_motion[2])
 
 Rn=R*0.6
 dln=dl*0.6
@@ -266,7 +268,7 @@ lm14_shift1=55
 lm14_shift2=110
 lm14_FrameAngle=-lm14_shift1+lm14_alpha12	
 #lm14_basemar=Marker(lm13.for_next_joint.parent(), "lm14_basemar", (0, 0, effDist/4*3), ref=lm13.for_next_joint)
-lm14=SliderMechanismLean(model, "SLM14", dln, drn, Ln, Rn, lm13.for_next_joint, 0, lm14_shift1, lm14_shift2, 0.6, _motion=_motion[3])
+lm14=SliderMechanismLean(model, "SLM14", dln, drn, Ln, Ln*0.6, Rn, lm13.for_next_joint, 0, lm14_shift1, lm14_shift2,  _motion=_motion[3], ball=1)
 
 cmd="c:\\MSC.Software\\Adams\\2016\\common\\mdi.bat aview ru-s i e"
 simcmd="simulation single trans type= static initial_static=no end_time=5 number_of_steps=50"
