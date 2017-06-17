@@ -1,0 +1,89 @@
+! Adams View Adams 2016 (built Jul 22 2016)
+! Graphics:  OpenGL
+! Using software OpenGL overlay plane emulation
+! Enter a command, '?', or 'help'.
+! Automatically executing Command file aview.cmd.
+! >> default units len=mm mass=kg force=newton
+! >> model create model=.Robot fit_to_view=no
+! >> part attrib part_name=ground name_vis=off
+! >> part modify rigid_body mass_properties part_name=ground material=.materials.steel
+! >> force create body gravitational gravity=gravity x_comp=0.000000 y_comp=-9806.650000 z_comp=0.000000
+! >> default attr size_of_icon=10.000000 
+! >> model attr model=.Robot size_of_icon=10.000000
+! >> output set results model = .Robot formatted = off
+! >>  output set results model =.Robot xrf = off
+! >> int dialog dis dialog=.gui.moag
+! >> simulation set choice=cplusplus
+! >> defaults command_file on_error = ignore_command echo_commands = off update_screen = off
+! VERIFY MODEL: .Robot
+! 
+!  -54 Gruebler Count (approximate degrees of freedom)
+!   36 Moving Parts (not including ground)
+!   49 Revolute Joints
+!    4 Translational Joints
+!    5 Motions
+! 
+!    0 Degrees of Freedom for .Robot
+! 
+! There are 54 redundant constraint equations.
+! 
+!    This constraint:                                      unnecessarily removes this DOF:
+! 
+!    .Robot.SLM11_RevJ             (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.SLM11_RevJ             (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.SLM11_RevJ2            (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.SLM11_RevJ2            (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.SLM11_Jslider_link1    (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.SLM11_Jdisk1_link1     (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.SLM11_Jdisk2_link2     (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.JParaLnk11_rotbase     (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.paralnk2_brace         (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.J1stPlate_Paralnk1     (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.paraLink3_2ndPlate     (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.paraLink2_2ndPlate     (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.paraLink2_2ndPlate     (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.J1stPlate90_lm11brace  (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.J1stPlate90_lm11brace  (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.paraLink2_Plate90      (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.paraLink4_Plate90      (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.part2_plate2_90        (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.SLM12_RevJ             (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.SLM12_RevJ             (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.SLM12_RevJ2            (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.SLM12_RevJ2            (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.SLM12_Jslider_link1    (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.SLM12_Jdisk1_link1     (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.SLM12_Jdisk2_link2     (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.Plate1_ParaLnk21       (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.plate3_toDisk2         (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.plate3_toDisk2         (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.TrdPlatetoAxis         (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.Paralnk22_secPlate     (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.ParaLnk23_TrdPlate     (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.ParaLnk24_TrdPlate90   (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.Fthplate_ParaLnk23     (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.Fthplate_lm12_DISK2    (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.Fthplate_lm12_DISK2    (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.Fthplate90_PataLnk24   (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.Fthplate90_lm12_disk2  (Revolute Joint)        Translation of I Marker Along Zg
+!    .Robot.Fthplate90_lm12_disk2  (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.Fthplate90_lm12_disk2  (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.SLM13_RevJ             (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.SLM13_RevJ             (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.SLM13_RevJ2            (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.SLM13_Jslider_link1    (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.SLM13_Jdisk2_link2     (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.SLM14_RevJ             (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.SLM14_Jdisk1_link1     (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.SLM14_Jdisk1_link1     (Revolute Joint)        Rotation Between Zi & Yj
+!    .Robot.SLM14_Jdisk2_link2     (Revolute Joint)        Rotation Between Zi & Xj
+!    .Robot.SLM11_SliderJoint      (Translational Joint)   Rotation Between Zi & Xj
+!    .Robot.SLM11_SliderJoint      (Translational Joint)   Rotation Between Xi & Yj
+!    .Robot.SLM12_SliderJoint      (Translational Joint)   Rotation Between Zi & Xj
+!    .Robot.SLM13_SliderJoint      (Translational Joint)   Rotation Between Zi & Xj
+!    .Robot.SLM14_SliderJoint      (Translational Joint)   Rotation Between Zi & Xj
+!    .Robot.SLM14_SliderJoint      (Translational Joint)   Rotation Between Xi & Yj
+! 
+! 
+! Model verified successfully
+quit conf=no
