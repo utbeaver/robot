@@ -7,6 +7,65 @@ from numpy import linalg as LA
 import numpy as np
 import matplotlib
 
+
+class rot:
+    def __init__(self, ang, _xyz="U"):
+        self.xyz=xyz.upper()
+        self.update(ang)
+    
+    def update(self, a):
+        c=np.cos(a)
+        s=np.sin(a)
+        if self.xyz=="X":
+            self.M=np.matrix([[1.0, 0.0, 0.0], [0.0, c,-s], [0.0, s, c]])
+        else if self.xyz=="Y":
+            self.M=np.matrix([[c, 0.0 -s], [0.0, 1.0, 0.0], [s, 0.0, c]])
+        else if self.xyz=='Z'   
+            self.M=np.matrix([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+        else:
+            slef.M=np.matrix([[1.0, 0.0, 0.0]. [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+        return self.M    
+
+class Marker:
+    def __init__(self, _pos, _prev):
+        self.pos=_pos
+        self.prev=_prev
+
+    def update(self, _m):
+        self.M=self.prev.M*_M
+        self.P=self.M*self.pos+prev.P
+        
+    def R(self): return self.P        
+    def TM(self): return self.M
+
+
+class Joint:
+    def __init__(self, _J, val=0):
+        self.J=_J
+        self.I=Marker(np.matrix([[0.0,0.0,0.0]]), self.J)
+        self.val=val
+        self.rotz=rot(val, "Z") 
+
+    def update(self, a):
+        rot=self.rotz.update(a)
+        self.I.update(rot)
+
+
+
+class link:
+    def __init__(self, paras, J=None):
+        self.m=1.0
+        self.scale=0.5
+        self.J=J
+        self.dtaa=paras[:4]
+        self.r=paras[4]
+    
+    def update:
+        pass
+    
+
+
+
 class DHTRM:
     def __init__(self, paras): #d, t, a al
         self.a=paras[2]
