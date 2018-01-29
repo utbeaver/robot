@@ -10,6 +10,7 @@
 #
 ############################################################################
 from math import *
+import numpy as np
 _zeros=(0.0, 0.0, 0.0)
 def splitXY(xy, scale=1.0):
   x=[]
@@ -99,11 +100,12 @@ def processPoint(pnts):
     lines.append(line)
   return lines
 
+
 class entity:
-  def __init__(self, parent, Name,  __sep="."):
+  def __init__(self, parent, Name,  __sep=".", vis="on", col="WHITE"):
     self._parent=parent      
     self._sep = __sep
-    self.d2r=3.14159/180
+    self.d2r=3.14159/180.0
     if self._parent != None:
       self._name = self._parent.name()+parent.sep()+Name       
     else:  
@@ -116,7 +118,8 @@ class entity:
       self.parent().addToContainer(self)
     self._output=False  
     self.name_=Name
-    self.vis="on"
+    self.vis=vis
+    self.col=col
 
   def name(self, short=False):
     if short==False:      
@@ -143,6 +146,12 @@ class entity:
       self.vis=val
     return self.vis
 
+  def color(self): 
+      return self.col
+
+  def getKids(self, token): 
+      return [i for i in self.container if i.__class__.__name__== token]
+
   def commands(self, lines, firstPass=True):
     if hasattr(self, "toAdams") and self._output==False:      
       self.toAdams()
@@ -156,8 +165,9 @@ class entity:
       lines=c.commands(lines)      
     for l in self._2ndPass:  
       lines.append(l)
-    lines.append("view zoom auto=on")
     return lines  
+
+ 
 
  
 class Road(entity):
@@ -174,8 +184,8 @@ class Road(entity):
     self._lines.append(line)  
 
 class Marker(entity):   
-  def __init__(self, parent, Name, pos=(0,0,0), orientation=(0,0,0), ref=None, adams_id=None):
-    entity.__init__(self, parent, Name)      
+  def __init__(self, parent, Name, pos=(0,0,0), orientation=(0,0,0), ref=None, adams_id=None, vis="on"):
+    entity.__init__(self, parent, Name, vis=vis)      
     self.cm = Name=="cm"
     self._pos = pos
     self._ang = orientation
@@ -195,7 +205,7 @@ class Marker(entity):
     if self.Id() != None:
       line = line + "adams_id=%d"%self.Id()
     self._lines.append(line)  
-    self._lines.append("\nentity attributes entity_name=%s visibility=%s color=.colors.GREEN entity_scope=all_color"%(self.name(), self.visual())) 
+    self._lines.append("\nentity attributes entity_name=%s visibility=%s"%(self.name(), self.visual())) 
       
 
 class Tire(entity):
@@ -301,7 +311,7 @@ class Polyline(entity):
     self._lines.append("close=%s"%self.close)  
 
 class Extrusion(entity):    
-  def __init__(self, parent, Name, pnts, Z, depth, color, ref): 
+  def __init__(self, parent, Name, pnts, Z, depth, color="WHITE", ref=None): 
     entity.__init__(self, parent, Name)      
     self.refName = "ground"
     if ref != None:
@@ -325,9 +335,13 @@ class Extrusion(entity):
     self._lines.append("entity attributes entity_name=%s type_filter=Extrusion visibility=%s color=.colors.%s entity_scope=all_color"%(self.name(), self.visual(), self._color)) 
     self._lines.append("geometry attributes geometry=%s render=filled"%self.name())
 
-
 class Link(entity):    
-  def __init__(self, parent, Name, w, d, mar1, mar2, color="GREEN"):      
+  def __init__(self, parent, Name, w, d, mar1, mar2, color="GREEN", union=False ):      
+    if union!=False:  
+        r=w*1.5/2
+        pnts=[(r*np.cos(i), r*np.sin(i)) for i in np.linspace(0, 330, 11)*np.pi/180.0]
+        self.geo1=Extrusion(parent, Name+"_cyn1", pnts, -0.5*d, d, ref=mar1)  
+        self.geo2=Extrusion(parent, Name+"_cyn2", pnts, -0.5*d, d, ref=mar2)  
     entity.__init__(self, parent, Name)      
     self._w=w
     self._d=d
@@ -336,12 +350,20 @@ class Link(entity):
     self._mar2=mar2
     parent.geometry(self)
     parent.primitiveGeo()
-
-
+    self.union=union
+                
   def toAdams(self):    
-    self._lines.append("geometry create shape link link_name=%s width=%f depth=%f i_marker=%s j_marker=%s\n"%(self.name(), self._w, self._d, self._mar1.name(), self._mar2.name()))
-    #self._lines.append("\nentity attributes entity_name=%s type_filter=Extrusion visibility=%s color=.colors.%s entity_scope=all_color"%(self.name(), self.visual(), self._color)) 
-    self._lines.append("\nentity attributes entity_name=%s type_filter=Extrusion visibility=%s color=.colors.%s entity_scope=all_color"%(self.name(), self.visual(), self._color)) 
+    if self.union==False:  
+        self._lines.append("geometry create shape link link_name=%s width=%f depth=%f i_marker=%s j_marker=%s\n"%(self.name(), self._w, self._d, self._mar1.name(), self._mar2.name()))
+    else:    
+        self._lines.append("geometry create shape link link_name=%s width=%f depth=%f i_marker=%s j_marker=%s\n"%(self.name(), self._w*.9, self._d*0.8, self._mar1.name(), self._mar2.name()))
+        self._lines.append("geometry create shape csg csg_name=%s.%s_csg1 base_object=%s object=%s type=union\n"%(self.parent().name(), self.name(1==1), self.name(), self.geo1.name()))    
+        self._lines.append("geometry create shape csg csg_name=%s.%s_csg2 base_object=%s.%s_csg1 object=%s type=union\n"%(self.parent().name(), self.name(1==1),self.parent().name(), self.name(1==1), self.geo2.name()))    
+
+    if self.union==True:  
+        self._lines.append("\nentity attributes entity_name=%s.%s_csg2 type_filter=Extrusion visibility=%s color=.colors.%s entity_scope=all_color"%(self.parent().name(),self.name(1==1), self.visual(), self._color)) 
+    else:    
+        self._lines.append("\nentity attributes entity_name=%s.%s type_filter=Extrusion visibility=%s color=.colors.%s entity_scope=all_color"%(self.parent().name(),self.name(1==1), self.visual(), self._color)) 
 
 class Ellipsoid(entity):
   def __init__(self, parent, Name, rx, ry, rz, ref, color="WHITE"):
@@ -378,10 +400,11 @@ class Box(entity):
     self._lines.append("\nentity attributes entity_name=%s type_filter=Block visibility=%s color=.colors.%s entity_scope=all_color"%(self.name(), self.visual(), self._color)) 
           
 class Plate(entity):	  
-  def __init__(self, parent, Name, r, w, mars, color="GREEN"):    
+  def __init__(self, parent, Name, r, w, mars, color="WHITE"):    
     entity.__init__(self, parent, Name)      
     self._r=r
     self._w=w
+    self._color = color
     self.markers=mars
     parent.geometry(self)
     parent.primitiveGeo()
@@ -391,6 +414,7 @@ class Plate(entity):
     for mar in self.markers[1:]:
       tempstr="%s, %s"%(tempstr, mar.name())	    
     self._lines.append("geom create shape plate plate=%s %s radius=%f width=%f"%(self.name(), tempstr, self._r, self._w)) 	  
+    self._lines.append("\nentity attributes entity_name=%s type_filter=plate visibility=%s color=.colors.%s entity_scope=all_color"%(self.name(), self.visual(), self._color)) 
 
 class Cylinder(entity):    
   def __init__(self, parent, Name, r, l, ref, color="GREEN"):    
@@ -404,7 +428,7 @@ class Cylinder(entity):
 
 
   def toAdams(self):    
-    self._lines.append("geometry create shape cylinder cylinder_name=%s length=%f radius=%f  angle=359.0 center_marker=%s"%(self.name(), self._l, self._r, self._ref.name()))
+    self._lines.append("geometry create shape cylinder cylinder_name=%s length=%f radius=%f  angle=359.9 center_marker=%s"%(self.name(), self._l, self._r, self._ref.name()))
     self._lines.append("\nentity attributes entity_name=%s type_filter=Cylinder visibility=%s color=.colors.%s entity_scope=all_color"%(self.name(), self.visual(), self._color)) 
 
 class PointMass(entity):
@@ -425,8 +449,8 @@ class PointMass(entity):
 
 
 class Part(entity):
-  def __init__(self, parent, Name="ground", mass=0.0, I=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), pos=_zeros, ori=_zeros, ref=None, adams_id=None):       
-    entity.__init__(self, parent, Name)      
+  def __init__(self, parent, Name="ground", mass=0.0, I=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), pos=_zeros, ori=_zeros, ref=None, adams_id=None, vis="on", col="WHITE"):       
+    entity.__init__(self, parent, Name, vis=vis, col=col)      
     self._cm = Marker(self, "cm", pos, ori, ref, adams_id)
     self._mass = mass
     self._I = I
@@ -475,11 +499,13 @@ class Part(entity):
       line = line+'part modify rigid_body mass_properties part_name=%s center_of_mass_marker=%s\n'%(self.name(), cm_name.name())
       line = line+'part modify rigid_body mass_properties part_name=%s mass=%f\n'%(self.name(), self.mass())
       line = line+'part modify rigid_body mass_properties part_name=%s ixx=%f iyy=%f izz=%f ixy=%f izx=%f iyz=%f\n'%(self.name(), self.I()[0], self.I()[1], self.I()[2], self.I()[3], self.I()[4], self.I()[5])
-    for geo in self.geo:      
-      if self.priGeo==True:
+    if self.priGeo==True:
         line = line+'part mod rigid_body mass_properties part_name=%s material_type = steel\n'%(self.name()) 
-      else:  
-        line = line+'file parasolid read file_name="%s" part_name=%s relative_to=%s\n'%(geo[0], self.name(), geo[1].name())        
+        for geo in self.geo:
+            line=line+"entity attributes entity_name=%s visibility=%s color=%s\n"%(geo[0].name(), self.visual(), self.color())
+    else:    
+        for geo in self.geo:      
+            line = line+'file parasolid read file_name="%s" part_name=%s relative_to=%s\n'%(geo[0], self.name(), geo[1].name())        
     if self.VW is not None:
       line=line+"part modify rigid_body initial_velocity part_name=%s &\n"%self.name()
       for i in self.VW:
@@ -493,6 +519,7 @@ class Part(entity):
     self.massProperties(self.cm())  
     if self.priGeo==True:
       line = 'part mod rigid_body mass_properties part_name=%s material_type = steel\n'%(self.name()) 
+      line=line+"entity attributes entity_name=%s visibility=%s color=%s\n"%(self.name(), self.visual(), self.color())
       self._lines.append(line)  
             
 
@@ -702,7 +729,7 @@ class Connector(entity):
   def type(self): return self._type
 
 class Motion123(Connector):
-  def __init__(self, parent, Name, marI, marJ, _type, func, dva="displacement"):    
+  def __init__(self, parent, Name, marI, marJ, func, _type="b3", dva="displacement"):    
     Connector.__init__(self, parent, Name, marI, marJ, _type)      
     self.func=func
     self.dva=dva
@@ -830,7 +857,7 @@ class Beam(Connector):
 
 
 class Bushing(Connector):  
-  def __init__(self, parent, Name, marI, marJ, _K, _C, _tK, _tC, _preload=(0,0,0,0,0,0)):      
+  def __init__(self, parent, Name, marI, marJ, _K, _C=(0,0,0), _tK=(0,0,0), _tC=(0,0,0), _preload=(0,0,0,0,0,0)):      
     Connector.__init__(self, parent, Name, marI, marJ, "bushing")      
     self._K=_K
     self._C=_C
@@ -1010,6 +1037,15 @@ class Model(entity):
     self._lines.append(line)
     line="executive set numerical model = %s hmax = 1.0e-3"%self.name()
     self._lines.append(line)
+    #line="defaults interface style=view_refresh"
+    #self._lines.append(line)
+    line="defaults interface style=classic"
+    self._lines.append(line)
+    self._lines.append("view zoom auto=on")
+    line='def att ico="off"'
+    self._lines.append(line)
+    #line='view management modify background_color = WHITE gradient = none grid_visibility = off'
+    #self._lines.append(line)
 
   def toFile(self, f, cmd=None):
     lines=self.commands([])	  

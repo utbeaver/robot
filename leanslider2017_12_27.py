@@ -4,9 +4,9 @@ import numpy as np
 import os
 d2r=np.pi/180
 _motion1=1
-_motion2=0
-_motion3=0
-_motion4=0
+_motion2=1
+_motion3=1
+_motion4=1
 
 def Sprocket_profile(R, N, xyz=(0,0,0)):
     alpha=2*np.pi/N
@@ -140,7 +140,7 @@ def createPlate(par, name, ps, r, T, ref):
 def createB(parent, name_, p1, p2, pos, ori, K, ref):
     mar1=Marker(p1, "%s_marI"%name_, pos, ori, ref=ref)
     mar2=Marker(p2, "%s_marJ"%name_, pos, ori, ref=ref)
-    B=Bushing(parent, name_, mar1, mar2, [i*100 for i in K], [i*10 for i in (1, 1, 1)])      
+    B= Bushing(parent, name_, mar1, mar2, K)      
     return B
 
 class SliderJoint(entity):
@@ -217,9 +217,7 @@ class SliderMechanismC(SliderJoint):
         pnts=[(-W4, -W), (W4, -W), (W4, -W+T), (-W4, -W+T)]
         Extrusion(slider, "slider1",  [(i[0], i[1]+W*2-T) for i in pnts], r-dr_-delta, dr_+delta, "RED", slide_basemar)
         
-	#motionFunc=Variable(self, "motionFunc",  "%f+sin(time/5*PI-PI/2)*%f"%((dl_-dr_)/2, (dl_+dr_)/2*_motion))
-        t=np.arcsin((dl_-dr_)/(dl_+dr_))
-	motionFunc=Variable(self, "motionFunc",  "(%f+sin(time/3*2*PI-%f)*%f)*%f"%((dl_-dr_)/2, t, (dl_+dr_)/2, _motion))
+	motionFunc=Variable(self, "motionFunc",  "%f+sin(time/5*PI-PI/2)*%f"%((dl_-dr_)/2, (dl_+dr_)/2*_motion))
         transJ=Joint(self, "SliderJoint", slide_basemar, braceGeo, "translational", motion="-VARVAL(%s)"%motionFunc.name())
 	Measure(self, "ActForce", "-MOTION(%s, 0, 4, %s)"%(transJ.motionName(), braceGeo.name()))
         if _lwidth==None:
@@ -247,7 +245,7 @@ class SliderMechanismC(SliderJoint):
         LinkLB=createLink(self, "LinkLB", pLnkLB_I, pLnkLB_J, r*2, T, self.basemarJ)
         (JB, marIB, marJB)=createJ(self, "slider_linkB", LinkLB, slider, pLnkLB_I, (0,0,0), self.basemarJ) 
         createJ(self, "crank_linkLB", self.mar1.parent(), LinkLB, pLnkLB_J, (0,0,0), self.basemarJ) 
-	#Measure(self, "LeftForceI", "-JOINT(%s, 0, 2, %s)-JOINT(%s, 0, 2, %s)"%(JF.name(), marJF.name(), JB.name(), marJB.name()))
+	Measure(self, "LeftForceI", "-JOINT(%s, 0, 2, %s)-JOINT(%s, 0, 2, %s)"%(JF.name(), marJF.name(), JB.name(), marJB.name()))
 
         alpha34=a34(-dl_+dr_, R_)
         alpha34f=a34(dr_, R_)
@@ -266,7 +264,7 @@ class SliderMechanismC(SliderJoint):
         (JF, marIF, marJF)=createJ(self, "slider_linkRF", slider, LinkRF, p1, (0,0,0), self.basemarJ) 
         LinkRB=createLink(self, "LinkRB", N_(p1), N_(p2), r*2, T, self.basemarJ)
         (JB, marIB, marJB)=createJ(self, "slider_linkRB", slider, LinkRB, N_(p1), (0,0,0), self.basemarJ) 
-	#Measure(self, "LeftForceII", "-JOINT(%s, 0, 2, %s)-JOINT(%s, 0, 2, %s)"%(JF.name(), marJF.name(), JB.name(), marJB.name()))
+	Measure(self, "LeftForceII", "-JOINT(%s, 0, 2, %s)-JOINT(%s, 0, 2, %s)"%(JF.name(), marJF.name(), JB.name(), marJB.name()))
 
         alpha34_center=alpha34f+(alpha34ic-alpha34f)/2.0
         print "alpha34Cen", alpha34_center/d2r
@@ -361,7 +359,7 @@ if __name__ == "__main__":
   dl=1.3448
   dr=0.9
   L=4*scale
-  R=1.0*scale
+  R=1.30*scale
   alpha1=45*0
   model=Model("sliderActuator", mm="meter", mass="kg", force="newton", icon_size=0.021)
   ground=model.ground()
@@ -435,27 +433,20 @@ if __name__ == "__main__":
   createJ(model, "J11B_", ParaLinkB11_, ground, N_(upnt1_), (0,0,0), mar1)
 
   DeltaF1=Part(model, "deltaF1")
-  paraMar1=Marker(DeltaF1, "paralmar", ref=mar1) 
-  Joint(model, "Paral1", paraMar1, mar1, "orientation", _jprim=1)
   paraCompf1.append(DeltaF1)
   temp=[(i[0], i[1], WT11_15) for i in (upnt3,   upnt2, upnt2_, upnt4)]
   createPlate(DeltaF1, "triangle", temp, lm11.r, lm11.T, mar1)
-  #createJ(model, "J12", DeltaF1, ParaLinkF11, upnt2, (0,0,0), mar1)
-  createB(model, "J12", DeltaF1, ParaLinkF11, upnt2, (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar1)
+  createJ(model, "J12", DeltaF1, ParaLinkF11, upnt2, (0,0,0), mar1)
   createJ(model, "J13", DeltaF1, lm11.Brace, upnt3, (0,0,0), mar1)
-  #createJ(model, "J12_", DeltaF1, ParaLinkF11_, upnt2_, (0,0,0), mar1)
-  createB(model, "J12_", DeltaF1, ParaLinkF11_, upnt2_, (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar1)
+  createJ(model, "J12_", DeltaF1, ParaLinkF11_, upnt2_, (0,0,0), mar1)
 
-  #DeltaB1=Part(model, "deltaB1")
-  DeltaB1=DeltaF1
+  DeltaB1=Part(model, "deltaB1")
   paraCompb1.append(DeltaB1)
   temp=[(i[0], i[1], -WT11_15) for i in (upnt44,  upnt2, upnt2_)]
-  createPlate(DeltaB1, "triangleB", temp, lm11.r, lm11.T, mar1)
-  #createJ(model, "J12B", DeltaB1, ParaLinkB11, N_(upnt2), (0,0,0), mar1)
-  createB(model, "J12B", DeltaB1, ParaLinkB11, N_(upnt2), (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar1)
+  createPlate(DeltaB1, "triangle", temp, lm11.r, lm11.T, mar1)
+  createJ(model, "J12B", DeltaB1, ParaLinkB11, N_(upnt2), (0,0,0), mar1)
   createJ(model, "J13B", DeltaB1, lm11.Brace, N_(upnt3), (0,0,0), mar1)
-  #createJ(model, "J12B_", DeltaB1, ParaLinkB11_, N_(upnt2_), (0,0,0), mar1)
-  createB(model, "J12B_", DeltaB1, ParaLinkB11_, N_(upnt2_), (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar1)
+  createJ(model, "J12B_", DeltaB1, ParaLinkB11_, N_(upnt2_), (0,0,0), mar1)
 
   cs=np.cos(lm11.alpha2nd)
   ss=np.sin(lm11.alpha2nd)
@@ -477,19 +468,17 @@ if __name__ == "__main__":
   for i in paraCompb1: i.visual("on")
 
   DeltaF2=Part(model, "DeltaF2")
-  paraMar2=Marker(DeltaF2, "paralmar", ref=mar1) 
-  Joint(model, "Paral2", paraMar2, mar1, "orientation", _jprim=1)
   paraCompf2.append(DeltaF2)
   createJ(model, "J15", DeltaF2, lm11.crank, Z(upnt6, WT11_15), (0,0,0), mar1)
-  #createJ(model, "J16", DeltaF2, ParaLinkF12, Z(upnt5, WT11_15), (0,0,0), mar1)
-  createB(model, "J16", DeltaF2, ParaLinkF12, Z(upnt5, WT11_15), (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar1)
+  createJ(model, "J16", DeltaF2, ParaLinkF12, Z(upnt5, WT11_15), (0,0,0), mar1)
+  #createB(model, "J16", DeltaF2, ParaLinkF12, Z(upnt5, WT11_15), (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar1)
 
   #DeltaB2=Part(model, "deltaB2")
   DeltaB2=DeltaF2
   paraCompb2.append(DeltaB2)
   createJ(model, "J15B", DeltaB2, lm11.crank, N_(upnt6), (0,0,0), mar1)
-  #createJ(model, "J16B", DeltaB2, ParaLinkB12, N_(upnt7), (0,0,0),  mar1)
   createB(model, "J16B", DeltaB2, ParaLinkB12, N_(upnt7), (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar1)
+  #createJ(model, "J16B", DeltaB2, ParaLinkB12, N_(upnt7), (0,0,0),  mar1)
 #
 
   Dl1=0.15*upnt6[0]*0
@@ -616,16 +605,13 @@ if __name__ == "__main__":
   createJ(model, "J21B_", ParaLinkB21_, DeltaB2, Z(vpnt1_, -(lm11.rwidth+lm11.T*4)), (0,0,0), mar2)
 #
   DeltaF3=Part(model, "deltaF3")
-  paraMar3=Marker(DeltaF3, "paralmar", ref=mar1) 
-  Joint(model, "Paral3", paraMar3, mar1, "orientation", _jprim=1)
 #  paraCompf2.append(DeltaF3)
   temp=[(i[0], i[1], lm22.W+lm22.T+lm22.T/2) for i in (vpnt3,   vpnt2, vpnt2_, vpnt4)]
   createPlate(DeltaF3, "triangle", temp, lm22.r, lm22.T, mar2)
   #createJ(model, "J22", DeltaF3, ParaLinkF21, vpnt2, (0,0,0), mar2)
   createB(model, "J22", DeltaF3, ParaLinkF21, vpnt2, (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar2)
   createJ(model, "J23", DeltaF3, lm22.Brace, vpnt3, (0,0,0), mar2)
-  #createJ(model, "J22_", DeltaF3, ParaLinkF21_, vpnt2_, (0,0,0), mar2)
-  createB(model, "J22_", DeltaF3, ParaLinkF21_, vpnt2_, (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar2)
+  createJ(model, "J22_", DeltaF3, ParaLinkF21_, vpnt2_, (0,0,0), mar2)
   mar2_DF3=Marker(DeltaF3, "mar2_df3", ref=mar2)
   Extrusion(DeltaF3, "cyn", cir_pnts(lm22.r/2, vpnt2), -outsize1-lm22.T*2, 2*(outsize1+lm22.T*2), ref=mar2_DF3)  
   Extrusion(DeltaF3, "cyn1", cir_pnts(lm22.r/2, vpnt2_),  lm22.W+lm22.T+lm22.T/2, (outsize1+lm22.T*2)-(lm22.W+lm22.T+lm22.T/2), ref=mar2_DF3)  
@@ -639,8 +625,7 @@ if __name__ == "__main__":
   #createJ(model, "J22B", DeltaB3, ParaLinkB21, N_(vpnt2), (0,0,0), mar2)
   createB(model, "J22B", DeltaB3, ParaLinkB21, N_(vpnt2), (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar2)
   createJ(model, "J23B", DeltaB3, lm22.Brace, N_(vpnt3), (0,0,0), mar2)
-  #createJ(model, "J22B_", DeltaB3, ParaLinkB21_, N_(vpnt2_), (0,0,0), mar2)
-  createB(model, "J22B_", DeltaB3, ParaLinkB21_, N_(vpnt2_), (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar2)
+  createJ(model, "J22B_", DeltaB3, ParaLinkB21_, N_(vpnt2_), (0,0,0), mar2)
 #
   cs=np.cos(lm22.alpha2nd)
   ss=np.sin(lm22.alpha2nd)
@@ -658,25 +643,22 @@ if __name__ == "__main__":
 #
 #
   DeltaF4=createLink(model, "DeltaF4", DZ(p6, lm22.T), DZ(p5, lm22.T), lm22.r, lm22.T, mar2)
-  paraMar4=Marker(DeltaF4, "paralmar", ref=mar1) 
-  Joint(model, "Paral4", paraMar4, mar1, "orientation", _jprim=1)
   paraCompf2.append(DeltaF4)
   createJ(model, "J25", DeltaF4, lm22.crank, p6, (0,0,0), mar2)
-  #createJ(model, "J26", DeltaF4, ParaLinkF22, p5, (0,0,0), mar2)
-  createB(model, "J26", DeltaF4, ParaLinkF22, p5, (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar2)
+  createJ(model, "J26", DeltaF4, ParaLinkF22, p5, (0,0,0), mar2)
 #
   ParaLinkB22=createLink(model, "ParaLinkB22", N_(DZ(vpnt44, 2*lm22.T)), N_(DZ(p7, 2*lm22.T)), lm22.r, lm22.T, mar2)
 #  paraCompb2.append(ParaLinkB22)
-  #createJ(model, "J24B", DeltaB3, ParaLinkB22, N_(DZ(vpnt44, 2*lm22.T)), (0,0,0), mar2)
-  createB(model, "J24B", DeltaB3, ParaLinkB22, N_(DZ(vpnt44, 2*lm22.T)), (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar2)
+  createJ(model, "J24B", DeltaB3, ParaLinkB22, N_(DZ(vpnt44, 2*lm22.T)), (0,0,0), mar2)
+  #createB(model, "J24B", DeltaB3, ParaLinkB22, N_(DZ(vpnt44, 2*lm22.T)), (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar2)
 #
   DeltaB4=DeltaF4
   paraCompb2.append(DeltaB4)
   createPlate(DeltaB4, "triangleB", [(i[0], i[1], -i[2]-lm22.T) for i in (p5, p6, p66, p7, p8)], lm22.r/2, lm22.T, mar2)
   createPlate(DeltaF4, "triangleF", [(i[0], i[1], +i[2]+lm22.T) for i in (p5, p6, p66, p7, p8)], lm22.r/2, lm22.T, mar2)
   createJ(model, "J25B", DeltaB4, lm22.crank, N_(p6), (0,0,0), mar2)
-  #createJ(model, "J26B", DeltaB4, ParaLinkB22, N_(p7), (0,0,0), mar2)
-  createB(model, "J26B", DeltaB4, ParaLinkB22, N_(p7), (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar2)
+  createJ(model, "J26B", DeltaB4, ParaLinkB22, N_(p7), (0,0,0), mar2)
+#  #createB(model, "J26B", DeltaB4, ParaLinkB22, N_(p7), (0,0,0), (1.0e6, 1.0e6, 1.0e6), mar2)
 #
   mar3_=Marker(DeltaF4, "mar3_", (p5[0],p5[1],0), (0, 0, 0 ), ref=mar2)
   Extrusion(DeltaF4, "cyn", cir_pnts(lm22.r/2), -lm22.W-lm22.T*2, 2*(lm22.W+lm22.T*2), ref=mar3_)  
@@ -689,7 +671,7 @@ if __name__ == "__main__":
   xy=[(p7[0]-p7[0], p7[2]+lm22.T/2), (p5[0]-p7[0], p7[2]+lm22.T/2), (p5[0]-p7[0], -p7[2]-lm22.T/2), (0, -p7[2]-lm22.T/2)]+ pcir_pnts(lm22.r, -90, 90, 10, (p7[2],0,0))  
   Extrusion(DeltaF4, "bracketUp", xy, p7[1]-(p7[1]+p5[1])/2-lm22.T/2, lm22.T, ref=mar3)  
   Extrusion(DeltaF4, "bracketBot", xy, p5[1]-(p7[1]+p5[1])/2-lm22.T/2, lm22.T, ref=mar3)  
-  Extrusion(DeltaF4, "cyn3", cir_pnts(lm22.r/2, xyz=(p7[2],0,0)),p5[1]-(p7[1]+p5[1])/2, p7[1]-p5[1], ref=mar3)  
+  Extrusion(DeltaF4, "cyn3", cir_pnts(lm22.r/2, xyz=(p7[2],0,0)), p5[1]-(p7[1]+p5[1])/2, p7[1]-p5[1], ref=mar3)  
 #
   part5=Part(model, "part5")
   mar4=Marker(part5, "mar4", (p7[2],0,0), ref=mar3)
@@ -706,7 +688,7 @@ if __name__ == "__main__":
   Extrusion(part5, "delta1", xy, p7[1]-(p7[1]+p5[1])/2+lm22.T/2, lm22.T, ref=mar4)
   Extrusion(part5, "delta2", xy, p5[1]-(p7[1]+p5[1])/2-lm22.T/2*3, lm22.T, ref=mar4)
 
-  xy=[(p7[2]/1.414, -(p7[1]-p5[1])/2-lm22.T*1.5)]+pcir_pnts(lm22.r,-45, 45, xyz=(p7[2]/1.414+length/2, 0, 0))+[(p7[2]/1.414, (p7[1]-p5[1])/2+lm22.T*1.5)]
+  xy=[(p7[2]/1.414, -(p7[1]-p5[1])/2-lm22.T*1.5)]+pcir_pnts(lm22.r, -45, 45, xyz=(p7[2]/1.414+length/2, 0, 0))+[(p7[2]/1.414, (p7[1]-p5[1])/2+lm22.T*1.5)]
   Extrusion(part5, "platefront", xy, lm33.Wi+lm33.T*4, lm33.T, ref=mar5) 
   Extrusion(part5, "plateback", xy, -lm33.Wi-lm33.T*5, lm33.T, ref=mar5) 
 
@@ -718,7 +700,7 @@ if __name__ == "__main__":
   pf=file("aview.cmd", "w")
   for l in lines: pf.write("%s\n"%l)
   #pf.write("executive set kinematics model = .sliderActuator error = 1.0E-002\n")
-  #pf.write("simulation single transient type = static end_time = 5 number_of_steps = 50\n")
+  pf.write("simulation single transient type = static end_time = 5 number_of_steps = 50\n")
   pf.close()    
   cmd="c:\\MSC.Software\\Adams\\2016\\common\\mdi.bat aview ru-s i e"
   os.system("taskkill /f /im aview.exe /t")

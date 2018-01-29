@@ -7,6 +7,64 @@ from numpy import linalg as LA
 import numpy as np
 import matplotlib
 
+class DHTRM:
+    def __init__(self, paras): #d, t, a al
+        self.a=paras[2]
+        self.d=paras[0]
+        self.ca=np.cos(paras[3])
+        self.sa=np.sin(paras[3])
+        self.update(paras[1])
+    
+
+    def update(self, t):
+        ct=np.cos(t)
+        st=np.sin(t)
+        self.M=np.array([
+            [ct, -st*self.ca, st*self.sa, self.a*ct],
+            [st, ct*self.ca, -ct*self.sa, self.a*st],
+            [0,  self.sa,        self.ca,    self.d],
+            [0,        0,              0,         1]
+        ])
+        self.M=np.mat(self.M)
+
+    def cmR(self, r]:
+        temp=np.array([r[0], r[1], r[2],1.0)])
+        temp=np.mat(temp)
+        return self.M*temp.T
+
+    def Multiply(self, _m):
+        temp=self.M*_m.M
+        return temp
+    
+
+
+
+class Robot:
+    def __init__(self, DHR=[]):
+        self.dof=len(DHR)
+        self.dhr=DHR
+        self.baseM=DHTRM()
+        self.DHMS=[DHTRM(v[:4]) for v in self.dhr]
+        self.cmr=[v[7] for v in self.dhr]
+        self.r=[v[4:7] for v in self.dhr]
+        for m in self.DHMS:
+            temp=temp.multply(m)
+            self.PosOri.append(temp)    
+
+
+    
+    def forWardKinematics(self, t):
+        self.PosOri=[]
+        temp=self.baseM
+        for i in range(len(t)): 
+            self.DHMS[i].update(t[i])
+            temp=temp.multply(self.DHMS[i])
+
+    def GeoInfor(self):
+        for dhparas in self.dhr:
+        
+        
+
 
 
 warnings.filterwarnings('error')
@@ -972,16 +1030,17 @@ class MainWindow(wx.Frame):
         )
         #glutInit()
         self.time_=0.0
-        self.split = wx.SplitterWindow(self, -1, style = wx.SP_LIVE_UPDATE)
-        self.robot=RobotDrawingBoard(self.split, self)
-        self.left=ControlPanel(self.split, self.robot)
-        self.robot.setCPanel(self.left)
-        self.split.SetMinimumPaneSize(5)
-        self.split.SplitVertically(self.left, self.robot, -100)
-        self.split.SetSashPosition(200)
-        self.split.SetSashPosition(200)
+        #self.split = wx.SplitterWindow(self, -1, style = wx.SP_LIVE_UPDATE)
+        #box = wx.BoxSizer(wx.HORIZONTAL)
+        self.robot=RobotDrawingBoard(self, self)
+        #self.left=ControlPanel(self.split, self.robot)
+        #self.robot.setCPanel(self.left)
+        #self.split.SetMinimumPaneSize(5)
+        #self.split.SplitVertically(self.left, self.robot, -100)
+        #self.split.SetSashPosition(200)
+        #self.split.SetSashPosition(200)
         box = wx.BoxSizer(wx.HORIZONTAL)
-        box.Add(self.split, 1, wx.ALIGN_CENTRE|wx.ALL|wx.EXPAND, 5)
+        box.Add(self.robot, 1, wx.ALIGN_CENTRE|wx.ALL|wx.EXPAND, 5)
         self.SetSizer(box)
 
  
