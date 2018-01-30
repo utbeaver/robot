@@ -1,12 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: iso-8859-1 -*-
-from parautility import *
-import actuator_solve as asol
-import warnings
-from numpy import linalg as LA
 import numpy as np
 import matplotlib
-
+d2r=np.pi/180.0
+r2d=1.0/d2r
 
 class rot:
     def __init__(self, ang=0, _xyz="U"):
@@ -99,4 +96,7 @@ class Robot_:
 
 
 
-
+if __name__=="__main__":
+    DHR=((1, 0, 90*d2r, l*0.2), (0, 1.0, 0.0, 1*o.2))
+    robot=Robot(DHR)
+    
