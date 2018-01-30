@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Jan 30 17:43:48 2018
+
+@author: peilin.song
+"""
+
 #!/usr/bin/env python
 # -*- coding: iso-8859-1 -*-
 import numpy as np
@@ -7,9 +14,9 @@ r2d=1.0/d2r
 
 class rot:
     def __init__(self, ang=0, _xyz="U"):
-        self.xyz=xyz.upper()
+        self.xyz=_xyz.upper()
+        self.M=np.matrix([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
         self.update(ang)
-        self.M=np.matrix([[1.0, 0.0, 0.0]. [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
     
     def update(self, a=0):
         c=np.cos(a)
@@ -21,7 +28,7 @@ class rot:
             self.M[1,2]=-s
             self.M[2,2]=c
             self.M[2,1]=s
-        else if self.xyz=='Z'   
+        elif self.xyz=='Z':   
             #self.M=np.matrix([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
             self.M[2,2]=1.0
             self.M[0,0]=c
@@ -36,7 +43,7 @@ class Marker:
         self.prev=_prev
 
     def update(self, _m):
-        if self.prevI=None:
+        if self.prev==None:
             self.M=self.prev.M*_m
             self.P=self.M*self.pos+prev.P
         else:    
@@ -67,16 +74,16 @@ class link:
         self.alpha=paras[2]
         self.r=paras[3]
         self.rotx=rot(self.alpha, 'X')
-        self.update()
         self.J=Marker(np.matrix([[self.a, 0, self.d]]).T, self.I)
         self.cm=Marker(np.matrix([[self.a*self.scale, 0, self.d*self.scale]]).T, self.I)
-    
+        self.update()
+        
     def update(self):
         self.J.update(self.rotx.M)
         self.cm.update(self.rotx.M)
     
 
-class Robot_:
+class Robot:
     def __init__(self, DHR):
         self.baseM=Marker()
         J=self.baseM
@@ -97,6 +104,5 @@ class Robot_:
 
 
 if __name__=="__main__":
-    DHR=((1, 0, 90*d2r, l*0.2), (0, 1.0, 0.0, 1*o.2))
+    DHR=((1, 0, 90*d2r, 1*0.2), (0, 1.0, 0.0, 1*0.2))
     robot=Robot(DHR)
-    
