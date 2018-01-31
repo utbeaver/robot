@@ -122,9 +122,37 @@ class Robot:
 #            print jl[0].Im.Rot
             jl[1].update()
 
+from wx import *
 
-
-if __name__=="__main__":
-    DHR=((1, 0, 90*d2r, 1*0.2), (0, 1.0, 0.0, 1*0.2), (0, 1.0, 0.0, 1*0.2))
-    robot=Robot(DHR)
-    robot.forwardK([0*d2r, 30*d2r, -30*d2r])
+class RobotDrawingBoard(glcanvas.GLCanvas):
+    def __init__(self, parent, robots):
+        glcanvas.GLCanvas.__init__(self, parent, -1, style=wx.WANTS_CHARS)
+        self.robots=robots
+        
+    def add_robot(self, robot_):
+        self.robots.append(robot_)
+#        
+class MainWindow(wx.Frame):
+    def __init__(self, parent = None,id = -1, title = "Syringa Robotics Inc."):        
+        wx.Frame.__init__(
+                self, parent, id, title, size = (1000,800),
+                style = wx.DEFAULT_FRAME_STYLE #| wx.NO_FULL_REPAINT_ON_RESIZE
+        )
+        self.robots=[]
+        self.glwin=RobotDrawingBoard(self, self.robots)
+        box = wx.BoxSizer(wx.HORIZONTAL)
+        box.Add(self.glwin, 1, wx.ALIGN_CENTRE|wx.ALL|wx.EXPAND, 5)
+        self.SetSizer(box)    
+        
+        self.Show(True)
+        
+#if __name__=="__main__":
+#    DHR=((1, 0, 90*d2r, 1*0.2), (0, 1.0, 0.0, 1*0.2), (0, 1.0, 0.0, 1*0.2))
+#    robot=Robot(DHR)
+#    robot.forwardK([0*d2r, 30*d2r, -30*d2r])
+if __name__=="__main__":        
+    app = wx.App()
+    frame = MainWindow()
+    app.MainLoop()
+    del frame
+    del app    
