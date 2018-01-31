@@ -38,29 +38,34 @@ class rot:
         return self.M    
 
 class Marker:
-    def __init__(self, _pos=np.matrix([[0.0,0.0,0.]]).T, _prev=None):
+    def __init__(self, _pos=np.matrix([[0.0,0.0,0.0]]).T, _prev=None):
         self.pos=_pos
-        self.prev=_prev
+        self.prevM=_prev
+        self.Rot=rot()
+        self.P=self.pos
 
     def update(self, _m):
-        if self.prev==None:
-            self.M=self.prev.M*_m
-            self.P=self.M*self.pos+prev.P
-        else:    
-            self.M=rot()
-            self.P=self.pos
+        if self.prevM!=None:
+            self.Rot.M=self.prevM.Rot.M*_m
+            print self.pos
+            self.P=self.Rot.M*self.pos+self.prevM.P
+  
         
 
 class Joint:
     def __init__(self, _J, val=0):
         self.J=_J
-        self.I=Marker(np.matrix([[0.0,0.0,0.0]]), self.J)
+        self.I=Marker(np.matrix([[0.0,0.0,0.0]]).T, self.J)
         self.val=val
         self.rotz=rot(val, "Z") 
 
     def update(self, a):
         rot=self.rotz.update(a)
+#        print rot
         self.I.update(rot)
+        
+    def IM(self): return self.J
+#    def JM(self): return self.J        
 
 
 
@@ -87,18 +92,20 @@ class Robot:
     def __init__(self, DHR):
         self.baseM=Marker()
         J=self.baseM
-        J_L=[]
+        self.J_L=[]
         for dhr_ in DHR:
             I=Joint(J)
-            lnk=link(dhr_, I)
+            lnk=link(dhr_, I.IM())
             J=lnk.J
-            J_L.append((I, J))
+            self.J_L.append((I, lnk))
 
             
     def forwardK(self, thetas):
-        for i in range(len(J_L)):
-            jl=J_L[i]
+        for i in range(len(self.J_L)):
+            jl=self.J_L[i]
             jl[0].update(thetas[i])
+#            print jl[0].I.M.M
+            
             jl[1].update()
 
 
@@ -106,3 +113,4 @@ class Robot:
 if __name__=="__main__":
     DHR=((1, 0, 90*d2r, 1*0.2), (0, 1.0, 0.0, 1*0.2))
     robot=Robot(DHR)
+    robot.forwardK([45*d2r, 30*d2r])
