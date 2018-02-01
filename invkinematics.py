@@ -196,22 +196,24 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
             if char==wx.WXK_UP or char==wx.WXK_DOWN or char==wx.WXK_LEFT or char==wx.WXK_RIGHT or char==wx.WXK_HOME:
                 self.keychar=char
                 self.ViewControl()  
-                self.Refresh()
+                self.OnPaint(evt)
+#                self.Refresh()
                 self.Update()
         evt.Skip()
     
     def OnMouseWheel(self, evt):    
         rot=evt.GetWheelRotation()
         self.pn=rot/120
-        dx=0.0
-        dy=0.0
+        dx=0.1
+        dy=0.1
         if self.keychar==None:     
             self.minx=self.minx-dx*self.pn
             self.maxx=self.maxx+dx*self.pn
             self.miny=self.miny-dy*self.pn
             self.maxy=self.maxy+dy*self.pn
         self.ViewControl()  
-        self.Refresh()
+        self.OnPaint(evt)
+#        self.Refresh()
         self.Update()
         evt.Skip()
 
