@@ -55,9 +55,10 @@ class Joint:
 
 
 
-class link:
-    def __init__(self, _name, paras, I=None):
+class Link:
+    def __init__(self, _name, paras, I=None, color=(1,1,1)):
         self.name=_name
+        self.color=color
         self.m=1.0
         self.scale=0.5#
         self.Im=I
@@ -80,64 +81,75 @@ class link:
         self.Jm.update(self.rotx)
         #self.cm.update(self.rotx)
     
-    def twoCyn(self, c1, c2):
-        glBegin(GL_LINES)
-        for i in range(len(c1)): 
-            v1=c1[i]
-            glVertex3fv(v1)
-            v2=c2[i]
-            glVertex3fv((v2))
-        glEnd()
-        glBegin(GL_LINE_LOOP)
+    def twoCyn(self, c1, c2, d=0, nor=[0,0,1.0]):
+        leng=len(c1)
+        glBegin(GL_QUADS)
+        for i in range(leng):
+            ii=(i+1)%leng
+            n=[c1[i][j]+c1[ii][j] for j in [0,1,2]]
+            n[2]=n[2]-2*d
+            nl=np.sqrt(n[0]*n[0]+n[1]*n[1]+n[2]*n[2])
+            n=[v/nl for v in n]
+            glNormal3fv(n)
+            glVertex3fv(c1[i])
+            glVertex3fv(c1[ii])
+            glVertex3fv(c2[ii])
+            glVertex3fv(c2[i])
+        glEnd()        
+        glBegin(GL_POLYGON)
+        glNormal3fv([-v for v in nor])
         for v in c1: glVertex3fv(v)
-        glEnd()
-        glBegin(GL_LINE_LOOP)
+        glEnd()        
+        glBegin(GL_POLYGON)
+        glNormal3fv([v for v in nor])
         for v in c2: glVertex3fv(v)
         glEnd()        
-    
+
     def geoInfo(self):  
         _r=self.r
         scale=1.5
-        if self.d>0.0: scale=1.0
+        if self.d>0.0: scale=0.0
         self.calllist1=glGenLists(1)
-        dcircle1=[(_r*np.cos(i), _r*np.sin(i), -_r*scale) for i in np.linspace(0, 330, 10)*d2r]
+        dcircle1=[(_r*np.cos(i), _r*np.sin(i), -_r*scale) for i in np.linspace(0, 350, 35)*d2r]
         dcircle2=[(vs[0], vs[1], self.d+_r*scale) for vs in dcircle1]
         glNewList(self.calllist1, GL_COMPILE)
         self.twoCyn(dcircle1, dcircle2)
         glEndList()
         if self.a>0.0:
             self.calllist2=glGenLists(1)
-            acircle1=[(0.0, _r*np.cos(i), _r*np.sin(i)+self.d) for i in np.linspace(0, 330, 10)*d2r]
+            acircle1=[(0.0, _r*np.cos(i), _r*np.sin(i)+self.d) for i in np.linspace(0, 350, 35)*d2r]
             acircle2=[(self.a, vs[1], vs[2]) for vs in acircle1]
             glNewList(self.calllist2, GL_COMPILE)
-            self.twoCyn(acircle1, acircle2)
+            self.twoCyn(acircle1, acircle2, self.d, [1.0, 0, 0])
             glEndList()
             
     def draw(self):
         m=self.Im
-        #print m.name
-        #print m.DH()
         if not self.init:
             self.geoInfo()
             self.init=True
         glPushMatrix()
+        glPushAttrib(GL_COLOR_BUFFER_BIT | GL_POLYGON_BIT)
+        glColor3fv(self.color)
         glMultMatrixf(self.Im.DH().flatten('F'))
         if self.calllist1 != None:
             glCallList(self.calllist1)
         if self.calllist2 != None:
             glCallList(self.calllist2)            
+        glPopAttrib()    
         glPopMatrix()
 
 class Robot:
-    def __init__(self, DHR):
+    def __init__(self, DHR, colors):
         self.baseM=Marker()
+        self.colors=colors
         J=self.baseM
         self.J_L=[]
         i=0
         for dhr_ in DHR:
             i=i+1
             I=Joint("J"+str(i), J)
-            lnk=link("lnk"+str(i), dhr_, I.IM())
+            lnk=Link("lnk"+str(i), dhr_, I.IM(), self.colors[i-1])
             J=lnk.Jm
             self.J_L.append((I, lnk))
 
@@ -146,7 +158,7 @@ class Robot:
         for i in range(len(self.J_L)):
             jl=self.J_L[i]
             jl[0].update(thetas[i]) #joint 
-            jl[1].update()  #link
+            jl[1].update()  #Link
     
     def draw(self):
         for i in range(len(self.J_L)):
@@ -182,7 +194,7 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
         glEnable(GL_LIGHTING)
         glEnable(GL_LIGHT0)
         glEnable (GL_COLOR_MATERIAL )
-        #glEnable(GL_NORMALIZE)
+        glEnable(GL_NORMALIZE)
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [0.8, 0.8, 0.8, 1.0])
         glLightfv(GL_LIGHT0, GL_DIFFUSE, [0.5, 0.5, 0.5, 1.0])
         glLightfv(GL_LIGHT0, GL_POSITION, [0,0, 10])
@@ -306,8 +318,9 @@ class MainWindow(wx.Frame):
                 style = wx.DEFAULT_FRAME_STYLE #| wx.NO_FULL_REPAINT_ON_RESIZE
         )
         scale=0.1
+        colors=((1,0,0), (0,1,0), (0,0,1), (1,1,0), (1,0,1), (0,1,1))
         DHR=((1.0, 0.0, 90*d2r, 1*scale), (0.0, 1.0, 0.0, 1*scale), (0, 1.0, 0.0, 1*scale))
-        self.robot=Robot(DHR)
+        self.robot=Robot(DHR, colors[:3])
         self.robot.forwardK([0,0,0])
         self.glwin=RobotDrawingBoard(self, self.robot)
         box = wx.BoxSizer(wx.HORIZONTAL)
