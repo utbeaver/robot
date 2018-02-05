@@ -276,14 +276,16 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
         if not self.init:
             self.InitGL()
             self.init = True
-        self.OnDraw()
-        self.SwapBuffers()
+        self.OnDraw(evt)
+        #self.SwapBuffers()
         evt.Skip()
 
-    def OnDraw(self):
+    def OnDraw(self, evt):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glCallList(self.axes)
         self.robot.draw()
+        self.SwapBuffers()
+        evt.Skip()
 #        
     def OnSize(self, event):
         wx.CallAfter(self.DoSetViewport)
@@ -303,9 +305,10 @@ class MainWindow(wx.Frame):
                 self, parent, id, title, size = (1000,800),
                 style = wx.DEFAULT_FRAME_STYLE #| wx.NO_FULL_REPAINT_ON_RESIZE
         )
-        DHR=((1.0, 0.0, 90*d2r, 1*0.2), (0.0, 1.0, 0.0, 1*0.2))#, (0, 1.0, 0.0, 1*0.2))
+        scale=0.1
+        DHR=((1.0, 0.0, 90*d2r, 1*scale), (0.0, 1.0, 0.0, 1*scale), (0, 1.0, 0.0, 1*scale))
         self.robot=Robot(DHR)
-        self.robot.forwardK([0,0])
+        self.robot.forwardK([0,0,0])
         self.glwin=RobotDrawingBoard(self, self.robot)
         box = wx.BoxSizer(wx.HORIZONTAL)
         box.Add(self.glwin, 1, wx.ALIGN_CENTRE|wx.ALL|wx.EXPAND, 5)
@@ -313,18 +316,32 @@ class MainWindow(wx.Frame):
         self.SetAutoLayout(True)
         self.Layout()
         self.CreateStatusBar()
+        menubar = wx.MenuBar()
+         
         filemenu = wx.Menu()
         menuitem = filemenu.Append(wx.ID_EXIT, "E&xit", "Terminate the program")
         self.Bind(wx.EVT_MENU, self.OnExit, id=wx.ID_EXIT) # here comes the event-handler
-        
-        menubar = wx.MenuBar()
         menubar.Append(filemenu,"&File")
+       
+        actids=[]
+        actionmenu=wx.Menu()
+        for i in range(1):actids.append(wx.NewId())
+        actionmenu.Append(actids[0], "Motion", "Motion")
+        self.Bind(wx.EVT_MENU, self.OnMotion, id=actids[0])
+        menubar.Append(actionmenu,"&Actions")
+
         self.SetMenuBar(menubar)
         self.Show(True)
         
     def OnExit(self,evt):
         self.Close()
         evt.Skip()
+        
+    def OnMotion(self, evt):
+        for i in np.linspace(-1, 1, 100)*d2r:
+            self.robot.forwardK([i*45, i*60, i*60])
+            self.glwin.OnDraw(evt)
+                     
 #if __name__=="__main__":
 #    DHR=((1, 0, 90*d2r, 1*0.2), (0, 1.0, 0.0, 1*0.2), (0, 1.0, 0.0, 1*0.2))
 #    robot=Robot(DHR)
