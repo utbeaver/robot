@@ -75,7 +75,6 @@ class Link:
         self.calllist1=None
         self.calllist2=None
         self.init=False
-#        self.geoInfo()
         
     def update(self):
         self.Jm.update(self.rotx)
@@ -108,10 +107,11 @@ class Link:
     def geoInfo(self):  
         _r=self.r
         scale=1.5
-        if self.d>0.0: scale=0.0
+        sign=1.0
+        if np.abs(self.d)>0.0: sign=self.d/np.abs(self.d) 
         self.calllist1=glGenLists(1)
-        dcircle1=[(_r*np.cos(i), _r*np.sin(i), -_r*scale) for i in np.linspace(0, 350, 35)*d2r]
-        dcircle2=[(vs[0], vs[1], self.d+_r*scale) for vs in dcircle1]
+        dcircle1=[(_r*np.cos(i), _r*np.sin(i), -_r*scale*sign) for i in np.linspace(0, 350, 35)*d2r]
+        dcircle2=[(vs[0], vs[1], self.d+_r*scale*sign) for vs in dcircle1]
         glNewList(self.calllist1, GL_COMPILE)
         self.twoCyn(dcircle1, dcircle2)
         glEndList()
@@ -176,15 +176,13 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
         self.minz=-5
         self.maxz=5
         self.keychar=None
-        self.Bind(wx.EVT_SIZE, self.OnSize)
+#        self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
         self.Bind(wx.EVT_KEY_DOWN, self.onKeyPress)
         self.Bind(wx.EVT_KEY_UP, self.onKeyPressUp)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.init=False
         
-    def add_robot(self, robot_):
-        self.robot.append(robot_)
 
     def InitGL(self):
         self.ViewControl()
@@ -288,16 +286,14 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
         if not self.init:
             self.InitGL()
             self.init = True
-        self.OnDraw(evt)
-        #self.SwapBuffers()
+        self.OnDraw()
         evt.Skip()
 
-    def OnDraw(self, evt):
+    def OnDraw(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glCallList(self.axes)
         self.robot.draw()
         self.SwapBuffers()
-        evt.Skip()
 #        
     def OnSize(self, event):
         wx.CallAfter(self.DoSetViewport)
@@ -318,10 +314,11 @@ class MainWindow(wx.Frame):
                 style = wx.DEFAULT_FRAME_STYLE #| wx.NO_FULL_REPAINT_ON_RESIZE
         )
         scale=0.1
-        colors=((1,0,0), (0,1,0), (0,0,1), (1,1,0), (1,0,1), (0,1,1))
-        DHR=((1.0, 0.0, 90*d2r, 1*scale), (0.0, 1.0, 0.0, 1*scale), (0, 1.0, 0.0, 1*scale))
-        self.robot=Robot(DHR, colors[:3])
-        self.robot.forwardK([0,0,0])
+        colors=((1,0,0), (0,1,0.5), (0,0,1), (1,1,0), (1,0,1), (0,1,1))
+        DHR=((2.0, 0.0, 90*d2r, 1*scale), (0.2, 1.0, 0.0, 1*scale), (-0.2, 1.0, 0.0*d2r, 1*scale), (0.2, 0.0, 90.0*d2r, 1*scale),
+                (0.4, 0.0, 90*d2r, 1*scale), (-0.2, 0.0, 90*d2r, 1*scale))
+        self.robot=Robot(DHR, colors[:6])
+        self.robot.forwardK([0,0,0, 0,0,0])
         self.glwin=RobotDrawingBoard(self, self.robot)
         box = wx.BoxSizer(wx.HORIZONTAL)
         box.Add(self.glwin, 1, wx.ALIGN_CENTRE|wx.ALL|wx.EXPAND, 5)
@@ -351,9 +348,9 @@ class MainWindow(wx.Frame):
         evt.Skip()
         
     def OnMotion(self, evt):
-        for i in np.linspace(-1, 1, 100)*d2r:
-            self.robot.forwardK([i*45, i*60, i*60])
-            self.glwin.OnDraw(evt)
+        for i in np.linspace(-1, 1, 300)*d2r:
+            self.robot.forwardK([i*0, i*0, i*0, 90*d2r+i*120, i*120, i*0])
+            self.glwin.OnDraw()
                      
 #if __name__=="__main__":
 #    DHR=((1, 0, 90*d2r, 1*0.2), (0, 1.0, 0.0, 1*0.2), (0, 1.0, 0.0, 1*0.2))
