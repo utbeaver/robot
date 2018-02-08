@@ -6,7 +6,47 @@ from wx import *
 d2r=np.pi/180.0
 r2d=1.0/d2r
 
+class Prism:
+    def __init__(self, b=1, h=1, w=1, basex=2.5, basey=0, basez=0):
+        self.bx=basex
+        self.by=basey
+        self.bz=basez
+        self.verts=((-b/2.0+self.bx/2.0, -w/2.0+self.by/2.0, 0+self.bz/2.0), 
+                    (b/2.0+self.bx/2.0,  -w/2.0+self.by/2.0, 0+self.bz/2.0),
+                    (0+self.bx/2.0,      -w/2.0+self.by/2.0, h+self.bz/2.0),
+                    (-b/2.0+self.bx/2.0,  w/2.0+self.by/2.0, 0+self.bz/2.0), 
+                    (b/2.0+self.bx/2.0,   w/2.0+self.by/2.0, 0+self.bz/2.0),
+                    (0+self.bx/2.0,       w/2.0+self.by/2.0, h+self.bz/2.0)
+                    )
+        self.faces=([1,2,3], [2,5,3], [5,6,3],
+                    [4,6,5], [3,6,1], [6,4,1]        
+                    )
+        self.normals=[]                    
+        self.calNormal()
+        
 
+    def createList(self):        
+        self.gl_list=glGenLists(1)
+        glNewList(self.gl_list, GL_COMPILE)
+        glFrontFace(GL_CCW)
+        glBegin(GL_TRIANGLES)
+        for i in range(len(self.faces)):
+            glNormal3fv(self.normals[i])
+            for j in self.faces[i]:
+                glVertex3fv(self.verts[j-1])
+        glEnd()
+        glEndList()      
+        return self.gl_list
+        
+                    
+    def calNormal(self):
+        for idx in self.faces:
+            vs=[self.verts[i-1] for i in idx]
+            v1=[(vs[1][i]-vs[0][i]) for i in range(3)]
+            v2=[(vs[2][i]-vs[0][i]) for i in range(3)]
+            n=np.cross(v1,v2)
+            mag=np.sqrt(n[0]*n[0]+n[1]*n[1]+n[2]*n[2])
+            self.normals.append([i/mag for i in n])
 
 class Marker:
     def __init__(self, _name="baseM", _pos=np.matrix([[0.0,0.0,0.0]]).T, _prev=None):
@@ -166,9 +206,10 @@ class Robot:
             jl[1].draw()
 
 class RobotDrawingBoard(glcanvas.GLCanvas):
-    def __init__(self, parent, robot_):
+    def __init__(self, parent, robot_, work_=None):
         glcanvas.GLCanvas.__init__(self, parent, -1, style=wx.WANTS_CHARS)
         self.robot=robot_
+        self.work=work_
         self.minx=-5
         self.maxx=5
         self.miny=-5
@@ -195,7 +236,7 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
         glEnable(GL_NORMALIZE)
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [0.8, 0.8, 0.8, 1.0])
         glLightfv(GL_LIGHT0, GL_DIFFUSE, [0.5, 0.5, 0.5, 1.0])
-        glLightfv(GL_LIGHT0, GL_POSITION, [0,0, 10])
+        glLightfv(GL_LIGHT0, GL_POSITION, [5,-5, 5])
 
         self.axes=glGenLists(1)
         glNewList(self.axes, GL_COMPILE)
@@ -211,6 +252,7 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
         glVertex3fv((0,0,1))
         glEnd() 
         glEndList()
+        self.wklist=self.work.createList()
         #self.OnDraw()
 
     def onKeyPressUp(self, evt):
@@ -292,6 +334,7 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
     def OnDraw(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glCallList(self.axes)
+        glCallList(self.wklist)
         self.robot.draw()
         self.SwapBuffers()
 #        
@@ -319,7 +362,8 @@ class MainWindow(wx.Frame):
                 (0.4, 0.0, 90*d2r, 1*scale), (-0.2, 0.0, 90*d2r, 1*scale))
         self.robot=Robot(DHR, colors[:6])
         self.robot.forwardK([0,0,0, 0,0,0])
-        self.glwin=RobotDrawingBoard(self, self.robot)
+        self.work=Prism()
+        self.glwin=RobotDrawingBoard(self, self.robot, self.work)
         box = wx.BoxSizer(wx.HORIZONTAL)
         box.Add(self.glwin, 1, wx.ALIGN_CENTRE|wx.ALL|wx.EXPAND, 5)
         self.SetSizer(box)    
@@ -335,9 +379,11 @@ class MainWindow(wx.Frame):
        
         actids=[]
         actionmenu=wx.Menu()
-        for i in range(1):actids.append(wx.NewId())
-        actionmenu.Append(actids[0], "Motion", "Motion")
-        self.Bind(wx.EVT_MENU, self.OnMotion, id=actids[0])
+        for i in range(2):actids.append(wx.NewId())
+        actionmenu.Append(actids[0], "Home", "Initial Posiition")
+        self.Bind(wx.EVT_MENU, self.OnHome, id=actids[0])
+        actionmenu.Append(actids[1], "Motion", "Motion")
+        self.Bind(wx.EVT_MENU, self.OnMotion, id=actids[1])
         menubar.Append(actionmenu,"&Actions")
 
         self.SetMenuBar(menubar)
@@ -348,10 +394,13 @@ class MainWindow(wx.Frame):
         evt.Skip()
         
     def OnMotion(self, evt):
-        for i in np.linspace(-1, 1, 300)*d2r:
-            self.robot.forwardK([i*0, i*0, i*0, 90*d2r+i*120, i*120, i*0])
+        for i in np.linspace(-1, 1, 1000)*d2r:
+            self.robot.forwardK([i*45, i*45, i*45, 90*d2r+i*120, i*120, i*0])
             self.glwin.OnDraw()
                      
+    def OnHome(self, evt):                 
+        self.robot.forwardK([0, 0, 0, 90*d2r+0, 0, 0])
+        self.glwin.OnDraw()
 #if __name__=="__main__":
 #    DHR=((1, 0, 90*d2r, 1*0.2), (0, 1.0, 0.0, 1*0.2), (0, 1.0, 0.0, 1*0.2))
 #    robot=Robot(DHR)
