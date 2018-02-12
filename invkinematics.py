@@ -2,10 +2,20 @@ import numpy as np
 import matplotlib
 from OpenGL.GL import *
 from wx import *
+np.set_printoptions(precision=3, formatter={'float': '{: 0.3f}'.format}, suppress=True)
+
 
 d2r=np.pi/180.0
 r2d=1.0/d2r
 
+def dotX(x, y):
+    dxy=np.dot(x.getA1(), y.getA1())
+    return dxy
+
+def crossX(x, y):
+    dxy=np.cross(x.getA1(), y.getA1())
+    return np.matrix(dxy).T
+    
 class Prism:
     def __init__(self, b=1, h=1, w=1, basex=2.5, basey=0, basez=0):
         self.bx=basex
@@ -48,6 +58,51 @@ class Prism:
             mag=np.sqrt(n[0]*n[0]+n[1]*n[1]+n[2]*n[2])
             self.normals.append([i/mag for i in n])
 
+class OBJ:
+    def __init__(self, filename, bx=1.0, by=0, bz=1, scale=0.7):
+        """Loads a Wavefront OBJ file. """
+        self.vertices = []
+        self.normals = []
+        self.faces = []
+
+        for line in open(filename, "r"):
+            if line.startswith('#'): continue
+            values = line.split()
+            if not values: continue
+            if values[0] == 'v':
+                v = map(float, values[1:4])
+                v=(bx+v[0]*scale, by+v[1]*scale, bz+v[2]*scale)
+                self.vertices.append(v)
+            elif values[0] == 'f':
+                face = []
+                norms = []
+                for v in values[1:]:
+                    w = v.split('/')
+                    face.append(int(w[0]))
+                vs=[self.vertices[i-1] for i in face] 
+                v1=[(vs[1][i]-vs[0][i]) for i in range(3)]
+                v2=[(vs[2][i]-vs[0][i]) for i in range(3)]
+                n=np.cross(v1,v2)
+                mag=np.sqrt(n[0]*n[0]+n[1]*n[1]+n[2]*n[2])
+                norms=[i/mag for i in n]
+                self.faces.append((face, norms))
+
+    def createList(self):        
+        self.gl_list = glGenLists(1)
+        glNewList(self.gl_list, GL_COMPILE)
+        glFrontFace(GL_CCW)
+        glPolygonMode(GL_BACK, GL_LINE);
+        for face in self.faces:
+            vertices, normals= face
+            glBegin(GL_POLYGON)
+            glNormal3fv(normals)
+            for i in range(len(vertices)):
+                glVertex3fv(self.vertices[vertices[i] - 1])
+            glEnd()
+        glPolygonMode(GL_FRONT, GL_FILL);
+        glEndList()
+        return self.gl_list
+
 class Marker:
     def __init__(self, _name="baseM", _pos=np.matrix([[0.0,0.0,0.0]]).T, _prev=None):
         self.name=_name
@@ -63,12 +118,12 @@ class Marker:
     def update(self, _m):
         if self.prevM!=None:
             self.Rot=self.prevM.Rot*_m
-            self.P=self.prevM.Rot*self.pos+self.prevM.P
+            self.P=self.prevM.Rot*self.pos#+self.prevM.P
             self.dh[:3, :3]=self.Rot
-            self.dh[:3, 3]=self.P
+            self.dh[:3, 3]=self.P+self.prevM.dh[:3,3]
 
-    def DH(self):
-        return self.dh
+    def DH(self): return self.dh
+    def relP(self): return self.P
   
         
 
@@ -91,7 +146,6 @@ class Joint:
         self.Im.update(self.rotz)
 
     def IM(self): return self.Im
-#    def JM(self): return self.J        
 
 
 
@@ -110,7 +164,6 @@ class Link:
         s=np.sin(self.alpha)
         self.rotx=np.matrix([[1.0, 0.0, 0.0], [0.0, c, -s], [0.0, s, c]]) 
         self.Jm=Marker(self.name+"_"+"Jm", np.matrix([[self.a, 0.0, self.d]]).T, self.Im)
-        #self.cm=Marker(np.matrix([[self.a*self.scale, 0, self.d*self.scale]]).T, self.Im)
         self.update()
         self.calllist1=None
         self.calllist2=None
@@ -118,8 +171,13 @@ class Link:
         
     def update(self):
         self.Jm.update(self.rotx)
-        #self.cm.update(self.rotx)
     
+    def eXe(self, ei):
+        return crossX(ei,  self.Im.dh[:3,2]) 
+
+    def eXl(self, ei):
+        return crossX(ei, self.Jm.relP())
+
     def twoCyn(self, c1, c2, d=0, nor=[0,0,1.0]):
         leng=len(c1)
         glBegin(GL_QUADS)
@@ -192,6 +250,10 @@ class Robot:
             lnk=Link("lnk"+str(i), dhr_, I.IM(), self.colors[i-1])
             J=lnk.Jm
             self.J_L.append((I, lnk))
+        nlink=len(self.J_L)
+        self.J=np.matrix(np.zeros((9,9)))    
+        self.Jb=np.matrix(np.zeros((3*nlink,nlink)))    
+
 
             
     def forwardK(self, thetas):
@@ -204,6 +266,28 @@ class Robot:
         for i in range(len(self.J_L)):
             jl=self.J_L[i]
             jl[1].draw()
+
+    def evalJ(self): 
+        nlink=len(self.J_L)
+        temp=np.matrix(np.zeros((3*nlink, nlink)))
+        for i in range(nlink):
+            link=self.J_L[i][1]
+            for j in range(0, i+1):
+                e=self.J_L[j][0].IM().DH()[:3,2]
+                t=link.eXl(e)
+                temp[i*3:(i+1)*3,j]=t 
+            print 30*"x", i
+            print temp[i*3:i*3+3, :]    
+        self.Jb.fill(0.0)        
+        for i in range(1, nlink):
+            print 30*"x", i
+            self.Jb[i*3:i*3+3,:i+1]=self.Jb[i*3-3:i*3,:i+1]+temp[i*3:i*3+3,:i+1]
+            print self.Jb[i*3:i*3+3, :]    
+
+
+
+                
+        
 
 class RobotDrawingBoard(glcanvas.GLCanvas):
     def __init__(self, parent, robot_, work_=None):
@@ -237,6 +321,8 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [0.8, 0.8, 0.8, 1.0])
         glLightfv(GL_LIGHT0, GL_DIFFUSE, [0.5, 0.5, 0.5, 1.0])
         glLightfv(GL_LIGHT0, GL_POSITION, [5,-5, 5])
+        glPolygonMode(GL_FRONT, GL_FILL);
+        
 
         self.axes=glGenLists(1)
         glNewList(self.axes, GL_COMPILE)
@@ -358,11 +444,17 @@ class MainWindow(wx.Frame):
         )
         scale=0.1
         colors=((1,0,0), (0,1,0.5), (0,0,1), (1,1,0), (1,0,1), (0,1,1))
-        DHR=((2.0, 0.0, 90*d2r, 1*scale), (0.2, 1.0, 0.0, 1*scale), (-0.2, 1.0, 0.0*d2r, 1*scale), (0.2, 0.0, 90.0*d2r, 1*scale),
-                (0.4, 0.0, 90*d2r, 1*scale), (-0.2, 0.0, 90*d2r, 1*scale))
+        DHR=((2.0, 0.0, 90*d2r, 1*scale), 
+                (0.2, 1.0, 0.0, 1*scale), 
+                (-0.2, 1.0, 0.0*d2r, 1*scale), 
+                (0.2, 0.0, 90.0*d2r, 1*scale),
+                (0.4, 0.0, 90*d2r, 1*scale), 
+                (-0.2, 0.0, 90*d2r, 1*scale)
+                )
         self.robot=Robot(DHR, colors[:6])
         self.robot.forwardK([0,0,0, 0,0,0])
-        self.work=Prism()
+        #self.work=Prism()
+        self.work=OBJ("dodecahedron.obj")
         self.glwin=RobotDrawingBoard(self, self.robot, self.work)
         box = wx.BoxSizer(wx.HORIZONTAL)
         box.Add(self.glwin, 1, wx.ALIGN_CENTRE|wx.ALL|wx.EXPAND, 5)
@@ -394,12 +486,13 @@ class MainWindow(wx.Frame):
         evt.Skip()
         
     def OnMotion(self, evt):
-        for i in np.linspace(-1, 1, 1000)*d2r:
+        for i in np.linspace(-1, 1, 100)*d2r:
             self.robot.forwardK([i*45, i*45, i*45, 90*d2r+i*120, i*120, i*0])
             self.glwin.OnDraw()
                      
     def OnHome(self, evt):                 
         self.robot.forwardK([0, 0, 0, 90*d2r+0, 0, 0])
+        self.robot.evalJ()    
         self.glwin.OnDraw()
 #if __name__=="__main__":
 #    DHR=((1, 0, 90*d2r, 1*0.2), (0, 1.0, 0.0, 1*0.2), (0, 1.0, 0.0, 1*0.2))
