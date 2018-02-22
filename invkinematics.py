@@ -2,7 +2,9 @@ import numpy as np
 import matplotlib
 from OpenGL.GL import *
 from wx import *
-np.set_printoptions(precision=3, formatter={'float': '{: 0.3f}'.format}, suppress=True)
+#np.set_printoptions(precision=8, formatter={'float': '{: 10.3f}'.format}, suppress=True)
+np.set_printoptions(linewidth=500)
+np.set_printoptions(precision=3, suppress=True)
 
 
 d2r=np.pi/180.0
@@ -16,47 +18,6 @@ def crossX(x, y):
     dxy=np.cross(x.getA1(), y.getA1())
     return np.matrix(dxy).T
     
-class Prism:
-    def __init__(self, b=1, h=1, w=1, basex=2.5, basey=0, basez=0):
-        self.bx=basex
-        self.by=basey
-        self.bz=basez
-        self.verts=((-b/2.0+self.bx/2.0, -w/2.0+self.by/2.0, 0+self.bz/2.0), 
-                    (b/2.0+self.bx/2.0,  -w/2.0+self.by/2.0, 0+self.bz/2.0),
-                    (0+self.bx/2.0,      -w/2.0+self.by/2.0, h+self.bz/2.0),
-                    (-b/2.0+self.bx/2.0,  w/2.0+self.by/2.0, 0+self.bz/2.0), 
-                    (b/2.0+self.bx/2.0,   w/2.0+self.by/2.0, 0+self.bz/2.0),
-                    (0+self.bx/2.0,       w/2.0+self.by/2.0, h+self.bz/2.0)
-                    )
-        self.faces=([1,2,3], [2,5,3], [5,6,3],
-                    [4,6,5], [3,6,1], [6,4,1]        
-                    )
-        self.normals=[]                    
-        self.calNormal()
-        
-
-    def createList(self):        
-        self.gl_list=glGenLists(1)
-        glNewList(self.gl_list, GL_COMPILE)
-        glFrontFace(GL_CCW)
-        glBegin(GL_TRIANGLES)
-        for i in range(len(self.faces)):
-            glNormal3fv(self.normals[i])
-            for j in self.faces[i]:
-                glVertex3fv(self.verts[j-1])
-        glEnd()
-        glEndList()      
-        return self.gl_list
-        
-                    
-    def calNormal(self):
-        for idx in self.faces:
-            vs=[self.verts[i-1] for i in idx]
-            v1=[(vs[1][i]-vs[0][i]) for i in range(3)]
-            v2=[(vs[2][i]-vs[0][i]) for i in range(3)]
-            n=np.cross(v1,v2)
-            mag=np.sqrt(n[0]*n[0]+n[1]*n[1]+n[2]*n[2])
-            self.normals.append([i/mag for i in n])
 
 class OBJ:
     def __init__(self, filename, bx=1.0, by=0, bz=1, scale=0.7):
@@ -73,6 +34,7 @@ class OBJ:
                 v = map(float, values[1:4])
                 v=(bx+v[0]*scale, by+v[1]*scale, bz+v[2]*scale)
                 self.vertices.append(v)
+                self.normals.append(np.matrix(np.zeros((3,1))))
             elif values[0] == 'f':
                 face = []
                 norms = []
@@ -86,6 +48,10 @@ class OBJ:
                 mag=np.sqrt(n[0]*n[0]+n[1]*n[1]+n[2]*n[2])
                 norms=[i/mag for i in n]
                 self.faces.append((face, norms))
+                for i in face:
+                    self.normals[i-1]=self.normals[i-1]+np.matrix(norms).T
+        self.normals=[v/np.sqrt(dotX(v,v)) for v in self.normals]            
+                    
 
     def createList(self):        
         self.gl_list = glGenLists(1)
@@ -107,20 +73,25 @@ class Marker:
     def __init__(self, _name="baseM", _pos=np.matrix([[0.0,0.0,0.0]]).T, _prev=None):
         self.name=_name
         self.pos=_pos
-        self.prevM=_prev
         self.Rot=np.matrix([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-        self.dh=np.matrix([[0.0, 0.0, 0.0, 0.0], 
-                           [0.0, 0.0, 0.0, 0.0], 
-                           [0.0, 0.0, 0.0, 0.0], 
+        self.dh=np.matrix([[1.0, 0.0, 0.0, 0.0], 
+                           [0.0, 1.0, 0.0, 0.0], 
+                           [0.0, 0.0, 1.0, 0.0], 
                            [0.0, 0.0, 0.0, 1.0]])
+        self.prevM=np.matrix([[1.0, 0.0, 0.0, 0.0], 
+                           [0.0, 1.0, 0.0, 0.0], 
+                           [0.0, 0.0, 1.0, 0.0], 
+                           [0.0, 0.0, 0.0, 1.0]])
+        if _prev!=None:
+            self.prevM=_prev
         self.P=self.pos
 
-    def update(self, _m):
-        if self.prevM!=None:
-            self.Rot=self.prevM.Rot*_m
-            self.P=self.prevM.Rot*self.pos#+self.prevM.P
-            self.dh[:3, :3]=self.Rot
-            self.dh[:3, 3]=self.P+self.prevM.dh[:3,3]
+    def update(self, _m, xyz=[]):
+        self.Rot=self.prevM.Rot*_m
+        self.P=self.prevM.Rot*self.pos#+self.prevM.P
+        self.dh[:3, :3]=self.Rot
+        self.dh[:3, 3]=self.P+self.prevM.dh[:3,3]
+        ris=[self.prevM.Rot*r+self.prevM.dh[:3,3]  for r in xyz]
 
     def DH(self): return self.dh
     def relP(self): return self.P
@@ -164,20 +135,22 @@ class Link:
         s=np.sin(self.alpha)
         self.rotx=np.matrix([[1.0, 0.0, 0.0], [0.0, c, -s], [0.0, s, c]]) 
         self.Jm=Marker(self.name+"_"+"Jm", np.matrix([[self.a, 0.0, self.d]]).T, self.Im)
-        self.update()
         self.calllist1=None
         self.calllist2=None
         self.init=False
+        self.da=[np.matrix([[0],[0],[0]])]
+        if self.d>0.0:
+            self.da.append(np.matrix([[self.a],[0], [self.a]]))    
+        if self.a>0:
+            temp=[np.matrix([[self.a], [0], [self.d]]) for _a in np.linspace(0, self.a, 10)]
+            self.da=self.da+temp[1:]
+        self.update()
+
+    def JM(self): return self.Jm    
         
     def update(self):
-        self.Jm.update(self.rotx)
+        self.Jm.update(self.rotx, self.da)
     
-    def eXe(self, ei):
-        return crossX(ei,  self.Im.dh[:3,2]) 
-
-    def eXl(self, ei):
-        return crossX(ei, self.Jm.relP())
-
     def twoCyn(self, c1, c2, d=0, nor=[0,0,1.0]):
         leng=len(c1)
         glBegin(GL_QUADS)
@@ -238,9 +211,10 @@ class Link:
         glPopMatrix()
 
 class Robot:
-    def __init__(self, DHR, colors):
+    def __init__(self, DHR, work, colors):
         self.baseM=Marker()
         self.colors=colors
+        self.work=work
         J=self.baseM
         self.J_L=[]
         i=0
@@ -251,43 +225,78 @@ class Robot:
             J=lnk.Jm
             self.J_L.append((I, lnk))
         nlink=len(self.J_L)
+        self.nlist=range(nlink)
         self.J=np.matrix(np.zeros((9,9)))    
         self.Jb=np.matrix(np.zeros((3*nlink,nlink)))    
+        self.e=np.matrix(np.zeros((3, nlink)))
+        self.L_=np.matrix(np.zeros((3, nlink)))
+        self.L=np.matrix(np.zeros((3, nlink)))
+        self.J=np.matrix(np.zeros((3, nlink)))
+        self.Jp=np.matrix(np.zeros((3*nlink, nlink)))
+        self.dJp=np.matrix(np.zeros((3*nlink, nlink)))
 
+    def evalJ(self, Jonly=False):
+        for i in self.nlist:
+            self.e[:,i]=self.J_L[i][0].IM().DH()[:3,2]
+            self.L_[:,i]=self.J_L[i][0].IM().DH()[:3,3]
+            self.L[:,i]=self.J_L[i][1].JM().DH()[:3,3]
+        self.Jb.fill(0.0)    
+        print self.L_
+        for i in self.nlist[1:]: #link
+            i3=3*i
+            ll=self.L[:, i]
+            for j in self.nlist[:i]:  #joint
+                self.Jb[i3:i3+3,j]=crossX(self.e[:,j], ll-self.L_[:,j])
+            #print self.Jb[i3:i3+3,:]
+                     
+        for i in self.nlist: 
+            temp=np.matrix(np.zeros((3,i+1)))
+            for j in range(i+1):
+                ej=self.e[:,j]
+    #            for k in range(
+
+    def numdJp(self, a):    
+        delta=0.01
+        temp=np.matrix(np.zeros((len(a), 3*len(a))))
+        for i in self.nlist:
+            a[i]=a[i]+delta
+            self.forwardK(a)
+            Jp=self.evalJ(True).copy()
+            a[i]=a[i]-delta*2
+            self.forwardK(a)
+            Jn=self.evalJ(True).copy()
+            a[i]=a[i]+delta
+            dp=(Jp-Jn)/2.0/delta
+            for j in self.nlist:
+                temp[j, i*3:i*3+3]=dp[:,j].T
+        print temp
+        
+    def numEvalJ(self, a): 
+        temp=np.matrix(np.zeros((3, len(a))))
+        delta=0.01
+        for i in self.nlist:
+            a[i]=a[i]+delta
+            pp=self.forwardK(a).copy()
+            a[i]=a[i]-delta*2
+            pn=self.forwardK(a)
+            temp[:,i]=(pp-pn)/delta/2.0
+            a[i]=a[i]+delta
+        print temp
 
             
+
+
     def forwardK(self, thetas):
-        for i in range(len(self.J_L)):
+        for i in self.nlist:#range(len(self.J_L)):
             jl=self.J_L[i]
             jl[0].update(thetas[i]) #joint 
             jl[1].update()  #Link
-    
+        return jl[1].Jm.DH()[:3,3]    
+
     def draw(self):
-        for i in range(len(self.J_L)):
+        for i in self.nlist:#range(len(self.J_L)):
             jl=self.J_L[i]
             jl[1].draw()
-
-    def evalJ(self): 
-        nlink=len(self.J_L)
-        temp=np.matrix(np.zeros((3*nlink, nlink)))
-        for i in range(nlink):
-            link=self.J_L[i][1]
-            for j in range(0, i+1):
-                e=self.J_L[j][0].IM().DH()[:3,2]
-                t=link.eXl(e)
-                temp[i*3:(i+1)*3,j]=t 
-            print 30*"x", i
-            print temp[i*3:i*3+3, :]    
-        self.Jb.fill(0.0)        
-        for i in range(1, nlink):
-            print 30*"x", i
-            self.Jb[i*3:i*3+3,:i+1]=self.Jb[i*3-3:i*3,:i+1]+temp[i*3:i*3+3,:i+1]
-            print self.Jb[i*3:i*3+3, :]    
-
-
-
-                
-        
 
 class RobotDrawingBoard(glcanvas.GLCanvas):
     def __init__(self, parent, robot_, work_=None):
@@ -451,11 +460,10 @@ class MainWindow(wx.Frame):
                 (0.4, 0.0, 90*d2r, 1*scale), 
                 (-0.2, 0.0, 90*d2r, 1*scale)
                 )
-        self.robot=Robot(DHR, colors[:6])
+        w_ork=OBJ("dodecahedron.obj")
+        self.robot=Robot(DHR, w_ork, colors[:6])
         self.robot.forwardK([0,0,0, 0,0,0])
-        #self.work=Prism()
-        self.work=OBJ("dodecahedron.obj")
-        self.glwin=RobotDrawingBoard(self, self.robot, self.work)
+        self.glwin=RobotDrawingBoard(self, self.robot, w_ork)
         box = wx.BoxSizer(wx.HORIZONTAL)
         box.Add(self.glwin, 1, wx.ALIGN_CENTRE|wx.ALL|wx.EXPAND, 5)
         self.SetSizer(box)    
@@ -491,8 +499,10 @@ class MainWindow(wx.Frame):
             self.glwin.OnDraw()
                      
     def OnHome(self, evt):                 
-        self.robot.forwardK([0, 0, 0, 90*d2r+0, 0, 0])
+        a=[0, 0, 0, 90*d2r+0, 0, 0]
+        self.robot.forwardK(a)
         self.robot.evalJ()    
+        self.robot.numEvalJ(a)
         self.glwin.OnDraw()
 #if __name__=="__main__":
 #    DHR=((1, 0, 90*d2r, 1*0.2), (0, 1.0, 0.0, 1*0.2), (0, 1.0, 0.0, 1*0.2))
