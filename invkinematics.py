@@ -183,7 +183,7 @@ class Link:
                     self.forcei[i3:i3+3,j]=dr/dr2/np.sqrt(dr2)
                     self.F=self.F+self.forcei[i3:i3+3,j]                 
                     self.M=self.M+crossX(self.pos[i]-imp, self.forcei[i3:i3+3,j])
-        if flag: print self._map            
+        if flag: print self.forcei            
         return (self.F, self.M)                   
 
 
@@ -252,7 +252,8 @@ class Link:
                     idx=self._map[i,j]-1
                     if idx>=0:
                         r1=self.work.vertices[idx]
-                        r2=self.forcei[i,j]
+                        r2=self.forcei[3*i:3*i+3,j]
+                        print r2
                         glVertex3fv(r1)
                         glVertex3fv(r1+r2)
             glEnd()
