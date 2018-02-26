@@ -4,7 +4,7 @@ from OpenGL.GL import *
 from wx import *
 #np.set_printoptions(precision=8, formatter={'float': '{: 10.3f}'.format}, suppress=True)
 np.set_printoptions(linewidth=500)
-np.set_printoptions(precision=3, suppress=True)
+np.set_printoptions(precision=5, suppress=True)
 
 
 d2r=np.pi/180.0
@@ -17,7 +17,7 @@ def dotX(x, y):
 def crossX(x, y):
     dxy=np.cross(x.getA1(), y.getA1())
     return np.matrix(dxy).T
-    
+
 
 class OBJ:
     def __init__(self, filename, bx=1.0, by=0, bz=1, scale=0.7):
@@ -32,7 +32,7 @@ class OBJ:
             if not values: continue
             if values[0] == 'v':
                 v = map(float, values[1:4])
-                v=(bx+v[0]*scale, by+v[1]*scale, bz+v[2]*scale)
+                v=np.matrix((bx+v[0]*scale, by+v[1]*scale, bz+v[2]*scale)).T
                 self.vertices.append(v)
                 self.normals.append(np.matrix(np.zeros((3,1))))
             elif values[0] == 'f':
@@ -42,22 +42,22 @@ class OBJ:
                     w = v.split('/')
                     face.append(int(w[0]))
                 vs=[self.vertices[i-1] for i in face] 
-                v1=[(vs[1][i]-vs[0][i]) for i in range(3)]
-                v2=[(vs[2][i]-vs[0][i]) for i in range(3)]
-                n=np.cross(v1,v2)
-                mag=np.sqrt(n[0]*n[0]+n[1]*n[1]+n[2]*n[2])
-                norms=[i/mag for i in n]
-                self.faces.append((face, norms))
+                v1=np.matrix([(vs[1][i,0]-vs[0][i,0]) for i in range(3)]).T
+                v2=np.matrix([(vs[2][i,0]-vs[0][i,0]) for i in range(3)]).T
+                n=crossX(v1,v2)
+                n=n/np.sqrt(n.T*n)
+                self.faces.append((face, n))
                 for i in face:
-                    self.normals[i-1]=self.normals[i-1]+np.matrix(norms).T
-        self.normals=[v/np.sqrt(dotX(v,v)) for v in self.normals]            
+                    self.normals[i-1]=self.normals[i-1]+n
+        self.normals=[v/np.sqrt(v.T*v) for v in self.normals]            
                     
 
     def createList(self):        
         self.gl_list = glGenLists(1)
         glNewList(self.gl_list, GL_COMPILE)
         glFrontFace(GL_CCW)
-        glPolygonMode(GL_BACK, GL_LINE);
+        #glPolygonMode(GL_BACK, GL_LINE);
+        glPolygonMode(GL_FRONT, GL_FILL);
         for face in self.faces:
             vertices, normals= face
             glBegin(GL_POLYGON)
@@ -92,6 +92,7 @@ class Marker:
         self.dh[:3, :3]=self.Rot
         self.dh[:3, 3]=self.P+self.prevM.dh[:3,3]
         ris=[self.prevM.Rot*r+self.prevM.dh[:3,3]  for r in xyz]
+        return ris
 
     def DH(self): return self.dh
     def relP(self): return self.P
@@ -121,7 +122,7 @@ class Joint:
 
 
 class Link:
-    def __init__(self, _name, paras, I=None, color=(1,1,1)):
+    def __init__(self, _name, paras, work_, I=None, color=(1,1,1)):
         self.name=_name
         self.color=color
         self.m=1.0
@@ -140,17 +141,52 @@ class Link:
         self.init=False
         self.da=[np.matrix([[0],[0],[0]])]
         if self.d>0.0:
-            self.da.append(np.matrix([[self.a],[0], [self.a]]))    
+            self.da.append(np.matrix([[0],[0], [self.d]]))    
         if self.a>0:
-            temp=[np.matrix([[self.a], [0], [self.d]]) for _a in np.linspace(0, self.a, 10)]
+            temp=[np.matrix([[_a], [0], [self.d]]) for _a in np.linspace(0, self.a, 10)]
             self.da=self.da+temp[1:]
         self.update()
-
+        self.pos=None
+        self.work=work_
+        self.numVertex=len(self.work.normals)
+        self.numMesh=len(self.da)
+        self.forcei=np.matrix(np.zeros((len(self.da)*3, len(self.work.normals))))
+        self.forcei.fill(0.0)
+        self.F=np.matrix([0.0,0.0,0.0]).T
+        self.M=np.matrix([0.0,0.0,0.0]).T
+        self._map=np.matrix(np.zeros((len(self.da), len(self.work.normals)), dtype=np.int32))
+        self.flag=(1==0)
+    
     def JM(self): return self.Jm    
         
     def update(self):
-        self.Jm.update(self.rotx, self.da)
-    
+        self.pos=self.Jm.update(self.rotx, self.da)
+
+    def calF(self, FM, flag=False):
+        self.flag=flag
+        self.F=FM[0]
+        self.M=FM[1]
+        imp=self.Im.DH()[:3,3]
+        for i in range(self.numMesh):
+            i3=3*i
+            rm=self.pos[i]
+            for j in range(self.numVertex):
+                rv=self.work.vertices[j]
+                rn=self.work.normals[j]
+                dr=rm-rv
+                if dotX(dr, rn)<0: 
+                    self.forcei[i3:i3+3,j]=np.matrix(np.zeros((3,1)))
+                    self._map[i,j]=0
+                else:    
+                    self._map[i,j]=j+1
+                    dr2=dr.T*dr
+                    self.forcei[i3:i3+3,j]=dr/dr2/np.sqrt(dr2)
+                    self.F=self.F+self.forcei[i3:i3+3,j]                 
+                    self.M=self.M+crossX(self.pos[i]-imp, self.forcei[i3:i3+3,j])
+        if flag: print self._map            
+        return (self.F, self.M)                   
+
+
     def twoCyn(self, c1, c2, d=0, nor=[0,0,1.0]):
         leng=len(c1)
         glBegin(GL_QUADS)
@@ -201,6 +237,25 @@ class Link:
             self.init=True
         glPushMatrix()
         glPushAttrib(GL_COLOR_BUFFER_BIT | GL_POLYGON_BIT)
+        if self.flag:
+            glColor3f(1.0, 1.0, 1.0)
+            glBegin(GL_POINTS)
+            for i in range(self.numMesh):
+                for j in range(self.numVertex):
+                    idx=self._map[i,j]
+                    if idx>0:
+                        glVertex3fv(self.work.vertices[self._map[i,j]-1])
+            glEnd()
+            glBegin(GL_LINES)
+            for i in range(self.numMesh):
+                for j in range(self.numVertex):
+                    idx=self._map[i,j]-1
+                    if idx>=0:
+                        r1=self.work.vertices[idx]
+                        r2=self.forcei[i,j]
+                        glVertex3fv(r1)
+                        glVertex3fv(r1+r2)
+            glEnd()
         glColor3fv(self.color)
         glMultMatrixf(self.Im.DH().flatten('F'))
         if self.calllist1 != None:
@@ -221,7 +276,7 @@ class Robot:
         for dhr_ in DHR:
             i=i+1
             I=Joint("J"+str(i), J)
-            lnk=Link("lnk"+str(i), dhr_, I.IM(), self.colors[i-1])
+            lnk=Link("lnk"+str(i), dhr_, self.work, I.IM(), self.colors[i-1])
             J=lnk.Jm
             self.J_L.append((I, lnk))
         nlink=len(self.J_L)
@@ -232,60 +287,34 @@ class Robot:
         self.L_=np.matrix(np.zeros((3, nlink)))
         self.L=np.matrix(np.zeros((3, nlink)))
         self.J=np.matrix(np.zeros((3, nlink)))
+        self.relP=np.matrix(np.zeros((3, nlink)))
         self.Jp=np.matrix(np.zeros((3*nlink, nlink)))
-        self.dJp=np.matrix(np.zeros((3*nlink, nlink)))
+        self.dR_dtheta=np.matrix(np.zeros((3*nlink, nlink)))
+        self.dR_dtheta.fill(0.0)
+        self.variable=np.matrix(np.zeros((6+3,1)))
+        self.rhs=np.matrix(np.zeros((6+3,1)))
+        
+        
 
-    def evalJ(self, Jonly=False):
+    def evalRhs_J(self, Jonly=False):
         for i in self.nlist:
             self.e[:,i]=self.J_L[i][0].IM().DH()[:3,2]
             self.L_[:,i]=self.J_L[i][0].IM().DH()[:3,3]
             self.L[:,i]=self.J_L[i][1].JM().DH()[:3,3]
-        self.Jb.fill(0.0)    
-        print self.L_
-        for i in self.nlist[1:]: #link
+            self.relP[:,i]=self.J_L[i][1].JM().relP()
+        #print self.relP    
+        for i in self.nlist[:]:
             i3=3*i
-            ll=self.L[:, i]
-            for j in self.nlist[:i]:  #joint
-                self.Jb[i3:i3+3,j]=crossX(self.e[:,j], ll-self.L_[:,j])
-            #print self.Jb[i3:i3+3,:]
-                     
-        for i in self.nlist: 
-            temp=np.matrix(np.zeros((3,i+1)))
+            relP=self.relP[:,i]
             for j in range(i+1):
-                ej=self.e[:,j]
-    #            for k in range(
-
-    def numdJp(self, a):    
-        delta=0.01
-        temp=np.matrix(np.zeros((len(a), 3*len(a))))
-        for i in self.nlist:
-            a[i]=a[i]+delta
-            self.forwardK(a)
-            Jp=self.evalJ(True).copy()
-            a[i]=a[i]-delta*2
-            self.forwardK(a)
-            Jn=self.evalJ(True).copy()
-            a[i]=a[i]+delta
-            dp=(Jp-Jn)/2.0/delta
-            for j in self.nlist:
-                temp[j, i*3:i*3+3]=dp[:,j].T
-        print temp
-        
-    def numEvalJ(self, a): 
-        temp=np.matrix(np.zeros((3, len(a))))
-        delta=0.01
-        for i in self.nlist:
-            a[i]=a[i]+delta
-            pp=self.forwardK(a).copy()
-            a[i]=a[i]-delta*2
-            pn=self.forwardK(a)
-            temp[:,i]=(pp-pn)/delta/2.0
-            a[i]=a[i]+delta
-        print temp
-
+                e=self.e[:,j]
+                self.dR_dtheta[i3:i3+3, j]=crossX(e, relP)  
+            if i>0:
+                self.dR_dtheta[i3:i3+3, :i]+=self.dR_dtheta[i3-3:i3, :i]  
+        FM=(self.rhs[6:], np.matrix([0.0,0.0,0.0]).T)
+        for i in self.nlist[::-1]:
+            FM=self.J_L[i][1].calF(FM, i==5)
             
-
-
     def forwardK(self, thetas):
         for i in self.nlist:#range(len(self.J_L)):
             jl=self.J_L[i]
@@ -330,7 +359,9 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [0.8, 0.8, 0.8, 1.0])
         glLightfv(GL_LIGHT0, GL_DIFFUSE, [0.5, 0.5, 0.5, 1.0])
         glLightfv(GL_LIGHT0, GL_POSITION, [5,-5, 5])
-        glPolygonMode(GL_FRONT, GL_FILL);
+        glPolygonMode(GL_FRONT, GL_FILL)
+        #glEnable(GL_PROGRAM_POINT_SIZE_EXT)
+        glPointSize(10)
         
 
         self.axes=glGenLists(1)
@@ -501,8 +532,7 @@ class MainWindow(wx.Frame):
     def OnHome(self, evt):                 
         a=[0, 0, 0, 90*d2r+0, 0, 0]
         self.robot.forwardK(a)
-        self.robot.evalJ()    
-        self.robot.numEvalJ(a)
+        self.robot.evalRhs_J()    
         self.glwin.OnDraw()
 #if __name__=="__main__":
 #    DHR=((1, 0, 90*d2r, 1*0.2), (0, 1.0, 0.0, 1*0.2), (0, 1.0, 0.0, 1*0.2))
