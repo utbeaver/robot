@@ -140,7 +140,7 @@ class Link:
         self.calllist2=None
         self.init=False
         self.da=[np.matrix([[0],[0],[0]])]
-        if self.d>0.0:
+        if np.abs(self.d)>0.0:
             self.da.append(np.matrix([[0],[0], [self.d]]))    
         if self.a>0:
             temp=[np.matrix([[_a], [0], [self.d]]) for _a in np.linspace(0, self.a, 10)]
@@ -150,11 +150,10 @@ class Link:
         self.work=work_
         self.numVertex=len(self.work.normals)
         self.numMesh=len(self.da)
-        self.forcei=np.matrix(np.zeros((len(self.da)*3, len(self.work.normals))))
-        self.forcei.fill(0.0)
+        self.Force=np.matrix(np.zeros((3,self.numMesh)))
+        self.invRR=np.matrix(np.zeros((3, self.numMesh*3)))
         self.F=np.matrix([0.0,0.0,0.0]).T
         self.M=np.matrix([0.0,0.0,0.0]).T
-        self._map=np.matrix(np.zeros((len(self.da), len(self.work.normals)), dtype=np.int32))
         self.flag=(1==0)
     
     def JM(self): return self.Jm    
@@ -163,10 +162,18 @@ class Link:
         self.pos=self.Jm.update(self.rotx, self.da)
 
     def calF(self, FM, flag=False):
-        self.flag=flag
+        if flag:
+            self.flag=flag
+            self.forcei=np.matrix(np.zeros((3*self.numMesh, len(self.work.normals))))
+            self.forcei.fill(0.0)
+            self._map=np.matrix(np.zeros((len(self.da), len(self.work.normals)), dtype=np.int32))
         self.F=FM[0]
         self.M=FM[1]
         imp=self.Im.DH()[:3,3]
+        L=self.JM().relP()
+        self.invRR.fill(0.0)
+        self.Force.fill(0.0)
+        self.M+=crossX(L, self.F)
         for i in range(self.numMesh):
             i3=3*i
             rm=self.pos[i]
@@ -175,15 +182,26 @@ class Link:
                 rn=self.work.normals[j]
                 dr=rm-rv
                 if dotX(dr, rn)<0: 
-                    self.forcei[i3:i3+3,j]=np.matrix(np.zeros((3,1)))
-                    self._map[i,j]=0
+                    if flag: 
+                        self.forcei[i3:i3+3,j]=np.matrix(np.zeros((3,1)))
+                        self._map[i,j]=0
                 else:    
-                    self._map[i,j]=j+1
+                    if flag: 
+                        self._map[i,j]=j+1
                     dr2=dr.T*dr
-                    self.forcei[i3:i3+3,j]=dr/dr2/np.sqrt(dr2)
-                    self.F=self.F+self.forcei[i3:i3+3,j]                 
-                    self.M=self.M+crossX(self.pos[i]-imp, self.forcei[i3:i3+3,j])
-        if flag: print self.forcei            
+                    dR2=dr2-self.r*self.r
+                    Rn_r=1.0/(dR2*dr2)
+                    temp=(2.0/dR2-1.0/dr2)*dr[0,0]
+                    self.invRR[:,i3+0]=-(dr*temp-np.matrix([[1],[0],[0]]))
+                    temp=(2.0/dR2-1.0/dr2)*dr[1,0]
+                    self.invRR[:,i3+1]=-(dr*temp-np.matrix([[0],[1],[0]]))
+                    temp=(2.0/dR2-1.0/dr2)*dr[2,0]
+                    self.invRR[:,i3+2]=-(dr*temp-np.matrix([[0],[0],[1]]))
+                    temp=dr/dR2/np.sqrt(dr2)
+                    if flag: self.forcei[i3:i3+3,j]=temp
+                    self.Force[:,i]+=temp
+            self.F=self.F+self.Force[:,i]                 
+            self.M=self.M+crossX(self.pos[i]-imp, self.Force[:,i])
         return (self.F, self.M)                   
 
 
@@ -253,7 +271,6 @@ class Link:
                     if idx>=0:
                         r1=self.work.vertices[idx]
                         r2=self.forcei[3*i:3*i+3,j]
-                        print r2
                         glVertex3fv(r1)
                         glVertex3fv(r1+r2)
             glEnd()
@@ -294,9 +311,11 @@ class Robot:
         self.dR_dtheta.fill(0.0)
         self.variable=np.matrix(np.zeros((6+3,1)))
         self.rhs=np.matrix(np.zeros((6+3,1)))
+        self.J=np.matrix(np.zeros((9,9)))
+        self.dM=np.matrix(np.zeros((3*nlink, nlink)))
+        self.dF=np.matrix(np.zeros((3*nlink, nlink)))
         
         
-
     def evalRhs_J(self, Jonly=False):
         for i in self.nlist:
             self.e[:,i]=self.J_L[i][0].IM().DH()[:3,2]
@@ -312,10 +331,37 @@ class Robot:
                 self.dR_dtheta[i3:i3+3, j]=crossX(e, relP)  
             if i>0:
                 self.dR_dtheta[i3:i3+3, :i]+=self.dR_dtheta[i3-3:i3, :i]  
+        self.J[6:9,:6]=self.dR_dtheta[i3:i3+3,:]        
+        #print self.dR_dtheta
         FM=(self.rhs[6:], np.matrix([0.0,0.0,0.0]).T)
+        tipLink=self.nlist[-1]
+        self.dM.fill(0.0)
+        self.dF.fill(0.0)
         for i in self.nlist[::-1]:
-            FM=self.J_L[i][1].calF(FM, i==5)
-            
+            i3=i*3
+            i33=i3+3
+            link=self.J_L[i][1]
+            imp=link.Im.DH()[:3,3]
+            FMn=link.calF(FM, i==4)
+            if i<tipLink:
+                for j in self.nlist:
+                    self.dF[i3:i33,j]+=self.dF[i33:i33+3,j]
+                    self.dM[i3:i33,j]+=self.dM[i33:i33+3,j]+crossX(self.relP[:,i], self.dF[i33:i33+3,j])
+                    if j<=i:
+                        dL=crossX(self.e[:,j], self.relP[:,i])
+                        self.dM[i3:i33,j]+=self.dM[i33:i33+3,j]+crossX(dL, FM[0])
+            for j in range(i+1):
+                for k in range(link.numMesh):
+                    k3=3*k
+                    k33=k3+3
+                    self.dF[i3:i33,j]-=2*link.invRR[:,k3:k33]*crossX(self.e[:,j], link.pos[k])
+                    if j<i:
+                        self.dF[i3:i33,j]-=2*link.invRR[:,k3:k33]*(self.dR_dtheta[i3-3:i3,j])
+                    self.dM[i3:i33,j]+=crossX(link.pos[k]-imp, self.dF[i3:i33, j])    
+                    dl=crossX(self.e[:,j], link.pos[k]-imp)
+                    self.dM[i3:i33,j]+=crossX(dl, link.Force[:,k])
+            FM=FMn    
+
     def forwardK(self, thetas):
         for i in self.nlist:#range(len(self.J_L)):
             jl=self.J_L[i]
@@ -490,7 +536,7 @@ class MainWindow(wx.Frame):
                 (-0.2, 1.0, 0.0*d2r, 1*scale), 
                 (0.2, 0.0, 90.0*d2r, 1*scale),
                 (0.4, 0.0, 90*d2r, 1*scale), 
-                (-0.2, 0.0, 90*d2r, 1*scale)
+                (0.2, 0.0, 90*d2r, 1*scale)
                 )
         w_ork=OBJ("dodecahedron.obj")
         self.robot=Robot(DHR, w_ork, colors[:6])
