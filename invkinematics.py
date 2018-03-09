@@ -151,7 +151,7 @@ class Link:
         self.numVertex=len(self.work.normals)
         self.numMesh=len(self.da)
         self.Force=np.matrix(np.zeros((3,self.numMesh)))
-        self.invRR=np.matrix(np.zeros((3, self.numMesh*3)))
+        self.dF_dR=np.matrix(np.zeros((3, self.numMesh*3)))
         self.F=np.matrix([0.0,0.0,0.0]).T
         self.M=np.matrix([0.0,0.0,0.0]).T
         self.flag=(1==0)
@@ -171,11 +171,12 @@ class Link:
         self.M=FM[1]
         imp=self.Im.DH()[:3,3]
         L=self.JM().relP()
-        self.invRR.fill(0.0)
+        self.dF_dR.fill(0.0)
         self.Force.fill(0.0)
         self.M+=crossX(L, self.F)
         for i in range(self.numMesh):
             i3=3*i
+            i33=i3+3
             rm=self.pos[i]
             for j in range(self.numVertex):
                 rv=self.work.vertices[j]
@@ -183,22 +184,23 @@ class Link:
                 dr=rm-rv
                 if dotX(dr, rn)<0: 
                     if flag: 
-                        self.forcei[i3:i3+3,j]=np.matrix(np.zeros((3,1)))
+                        self.forcei[i3:i33,j]=np.matrix(np.zeros((3,1)))
                         self._map[i,j]=0
                 else:    
                     if flag: 
                         self._map[i,j]=j+1
                     dr2=dr.T*dr
                     dR2=dr2-self.r*self.r
-                    Rn_r=1.0/(dR2*dr2)
-                    temp=(2.0/dR2-1.0/dr2)*dr[0,0]
-                    self.invRR[:,i3+0]=-(dr*temp-np.matrix([[1],[0],[0]]))
-                    temp=(2.0/dR2-1.0/dr2)*dr[1,0]
-                    self.invRR[:,i3+1]=-(dr*temp-np.matrix([[0],[1],[0]]))
-                    temp=(2.0/dR2-1.0/dr2)*dr[2,0]
-                    self.invRR[:,i3+2]=-(dr*temp-np.matrix([[0],[0],[1]]))
+                    Rn_r=1.0/(dR2*np.sqrt(dr2))
+                    temp1=2.0/dR2+1.0/dr2
+                    temp=temp1*dr[0,0]
+                    self.dF_dR[:,i3+0]+=-(dr*temp-np.matrix([[1],[0],[0]]))*Rn_r
+                    temp=temp1*dr[1,0]
+                    self.dF_dR[:,i3+1]+=-(dr*temp-np.matrix([[0],[1],[0]]))*Rn_r
+                    temp=temp1*dr[2,0]
+                    self.dF_dR[:,i3+2]+=-(dr*temp-np.matrix([[0],[0],[1]]))*Rn_r
                     temp=dr/dR2/np.sqrt(dr2)
-                    if flag: self.forcei[i3:i3+3,j]=temp
+                    if flag: self.forcei[i3:i33,j]=temp
                     self.Force[:,i]+=temp
             self.F=self.F+self.Force[:,i]                 
             self.M=self.M+crossX(self.pos[i]-imp, self.Force[:,i])
@@ -338,6 +340,7 @@ class Robot:
         self.dF.fill(0.0)
         for i in self.nlist[::-1]:
             i3=i*3
+            print i3
             i33=i3+3
             link=self.J_L[i][1]
             imp=link.Im.DH()[:3,3]
@@ -353,10 +356,9 @@ class Robot:
                 for k in range(link.numMesh):
                     k3=3*k
                     k33=k3+3
-                    self.dF[i3:i33,j]-=2*link.invRR[:,k3:k33]*crossX(self.e[:,j], link.pos[k]-imp)
-                    #if i==5: print self.dF[i3:i33,i], j, self.e[:,j].T, (link.pos[k]-imp).T, imp        
+                    self.dF[i3:i33,j]+=link.dF_dR[:,k3:k33]*crossX(self.e[:,j], link.pos[k]-imp)
                     if j<i:
-                        self.dF[i3:i33,j]-=2*link.invRR[:,k3:k33]*(self.dR_dtheta[i3-3:i3,j])
+                        self.dF[i3:i33,j]+=link.dF_dR[:,k3:k33]*(self.dR_dtheta[i3-3:i3,j])
                     self.dM[i3:i33,j]+=crossX(link.pos[k]-imp, self.dF[i3:i33, j])    
                     dl=crossX(self.e[:,j], link.pos[k]-imp)
                     self.dM[i3:i33,j]+=crossX(dl, link.Force[:,k])
@@ -365,7 +367,7 @@ class Robot:
     
     def numDF(self, thetas):
         dFN=np.matrix(np.zeros((3*6, 6)))
-        delta=0.001
+        delta=0.0001
         for i in range(6):
             p=[]
             n=[]
@@ -382,6 +384,8 @@ class Robot:
             for j in self.nlist[::-1]:
                 fm=self.J_L[j][1].calF(fm)
                 n.append(fm[0])
+            p=p[::-1]    
+            n=n[::-1]    
             for j in  self.nlist[::-1]:
                 dFN[j*3:j*3+3, i]=(p[j]-n[j])/(2*delta) 
         print dFN
