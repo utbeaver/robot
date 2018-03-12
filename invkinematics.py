@@ -162,13 +162,14 @@ class Link:
         self.pos=self.Jm.update(self.rotx, self.da)
 
     def calF(self, FM, flag=False):
+        Coffs=1
         if flag:
             self.flag=flag
             self.forcei=np.matrix(np.zeros((3*self.numMesh, len(self.work.normals))))
             self.forcei.fill(0.0)
             self._map=np.matrix(np.zeros((len(self.da), len(self.work.normals)), dtype=np.int32))
-        self.F=FM[0]
-        self.M=FM[1]
+        self.F=FM[0].copy()
+        self.M=FM[1].copy()
         imp=self.Im.DH()[:3,3]
         L=self.JM().relP()
         self.dF_dR.fill(0.0)
@@ -191,7 +192,7 @@ class Link:
                         self._map[i,j]=j+1
                     dr2=dr.T*dr
                     dR2=dr2-self.r*self.r
-                    Rn_r=1.0/(dR2*np.sqrt(dr2))
+                    Rn_r=1.0/(dR2*np.sqrt(dr2))*Coffs
                     temp1=2.0/dR2+1.0/dr2
                     temp=temp1*dr[0,0]
                     self.dF_dR[:,i3+0]+=-(dr*temp-np.matrix([[1],[0],[0]]))*Rn_r
@@ -199,7 +200,7 @@ class Link:
                     self.dF_dR[:,i3+1]+=-(dr*temp-np.matrix([[0],[1],[0]]))*Rn_r
                     temp=temp1*dr[2,0]
                     self.dF_dR[:,i3+2]+=-(dr*temp-np.matrix([[0],[0],[1]]))*Rn_r
-                    temp=dr/dR2/np.sqrt(dr2)
+                    temp=dr/dR2/np.sqrt(dr2)*Coffs
                     if flag: self.forcei[i3:i33,j]=temp
                     self.Force[:,i]+=temp
             self.F=self.F+self.Force[:,i]                 
@@ -335,12 +336,12 @@ class Robot:
                 self.dR_dtheta[i3:i3+3, :i]+=self.dR_dtheta[i3-3:i3, :i]  
         self.J[6:9,:6]=self.dR_dtheta[i3:i3+3,:]        
         FM=(self.rhs[6:], np.matrix([0.0,0.0,0.0]).T)
+        FM=(np.matrix([1.0,1.0,1.0]).T, np.matrix([0.0,0.0,0.0]).T)
         tipLink=self.nlist[-1]
         self.dM.fill(0.0)
         self.dF.fill(0.0)
         for i in self.nlist[::-1]:
             i3=i*3
-            print i3
             i33=i3+3
             link=self.J_L[i][1]
             imp=link.Im.DH()[:3,3]
@@ -349,25 +350,29 @@ class Robot:
                 for j in self.nlist:
                     self.dF[i3:i33,j]+=self.dF[i33:i33+3,j]
                     self.dM[i3:i33,j]+=self.dM[i33:i33+3,j]+crossX(self.relP[:,i], self.dF[i33:i33+3,j])
-                    if j<=i:
-                        dL=crossX(self.e[:,j], self.relP[:,i])
-                        self.dM[i3:i33,j]+=self.dM[i33:i33+3,j]+crossX(dL, FM[0])
             for j in range(i+1):
-                for k in range(link.numMesh):
-                    k3=3*k
-                    k33=k3+3
-                    self.dF[i3:i33,j]+=link.dF_dR[:,k3:k33]*crossX(self.e[:,j], link.pos[k]-imp)
+                dL=crossX(self.e[:,j], self.relP[:,i])
+                self.dM[i3:i33,j]+=crossX(dL, FM[0])
+            for k in range(link.numMesh):
+                k3=3*k
+                k33=k3+3
+                pos_imp=link.pos[k]-imp
+                for j in range(i+1):
+                    df=link.dF_dR[:,k3:k33]*crossX(self.e[:,j], pos_imp)
                     if j<i:
-                        self.dF[i3:i33,j]+=link.dF_dR[:,k3:k33]*(self.dR_dtheta[i3-3:i3,j])
-                    self.dM[i3:i33,j]+=crossX(link.pos[k]-imp, self.dF[i3:i33, j])    
-                    dl=crossX(self.e[:,j], link.pos[k]-imp)
+                        df+=link.dF_dR[:,k3:k33]*(self.dR_dtheta[i3-3:i3,j])
+                    dl=crossX(self.e[:,j], pos_imp)
                     self.dM[i3:i33,j]+=crossX(dl, link.Force[:,k])
+                    self.dM[i3:i33,j]+=crossX(pos_imp, df)#self.dF[i3:i33,j])    
+                    self.dF[i3:i33,j]+=df#link.dF_dR[:,k3:k33]*crossX(self.e[:,j], pos_imp)
+                    #if j<i:
+                    #    self.dF[i3:i33,j]+=link.dF_dR[:,k3:k33]*(self.dR_dtheta[i3-3:i3,j])
             FM=FMn    
-        print self.dF        
+        return self.dF        
     
     def numDF(self, thetas):
         dFN=np.matrix(np.zeros((3*6, 6)))
-        delta=0.0001
+        delta=0.00001
         for i in range(6):
             p=[]
             n=[]
@@ -375,20 +380,22 @@ class Robot:
             d[i]=d[i]+delta
             self.forwardK(d)
             fm=(self.rhs[6:], np.matrix([0.0,0.0,0.0]).T)
+            fm=(np.matrix([1.0,1.0,1.0]).T, np.matrix([0.0,0.0,0.0]).T)
             for j in  self.nlist[::-1]:
                 fm=self.J_L[j][1].calF(fm)
-                p.append(fm[0])
+                p.append(fm[0].copy())
             d[i]=d[i]-2*delta
             self.forwardK(d)
             fm=(self.rhs[6:], np.matrix([0.0,0.0,0.0]).T)
+            fm=(np.matrix([1.0,1.0,1.0]).T, np.matrix([0.0,0.0,0.0]).T)
             for j in self.nlist[::-1]:
                 fm=self.J_L[j][1].calF(fm)
-                n.append(fm[0])
+                n.append(fm[0].copy())
             p=p[::-1]    
             n=n[::-1]    
             for j in  self.nlist[::-1]:
                 dFN[j*3:j*3+3, i]=(p[j]-n[j])/(2*delta) 
-        print dFN
+        return dFN
             
 
 
@@ -603,15 +610,23 @@ class MainWindow(wx.Frame):
         
     def OnMotion(self, evt):
         for i in np.linspace(-1, 1, 100)*d2r:
-            self.robot.forwardK([i*45, i*45, i*45, 90*d2r+i*120, i*120, i*0])
+            a=[i*45, i*45, i*45, 90*d2r+i*120, i*120, i*0]
+            self.robot.forwardK(a)
+            df=self.robot.evalRhs_J()    
+            dfn=self.robot.numDF(a)
             self.glwin.OnDraw()
+            print df
+            print df-dfn
                      
     def OnHome(self, evt):                 
         a=[0, 0, 0, 90*d2r+0, 0, 0]
         self.robot.forwardK(a)
-        self.robot.evalRhs_J()    
+        df=self.robot.evalRhs_J()    
+        dfn=self.robot.numDF(a)
         self.glwin.OnDraw()
-        self.robot.numDF(a)
+        print df
+        print dfn
+        print df-dfn
 #if __name__=="__main__":
 #    DHR=((1, 0, 90*d2r, 1*0.2), (0, 1.0, 0.0, 1*0.2), (0, 1.0, 0.0, 1*0.2))
 #    robot=Robot(DHR)
