@@ -171,6 +171,7 @@ class Link:
         self.F=FM[0].copy()
         self.M=FM[1].copy()
         imp=self.Im.DH()[:3,3]
+        e=self.Im.DH()[:3,2]
         L=self.JM().relP()
         self.dF_dR.fill(0.0)
         self.Force.fill(0.0)
@@ -205,7 +206,8 @@ class Link:
                     self.Force[:,i]+=temp
             self.F=self.F+self.Force[:,i]                 
             self.M=self.M+crossX(self.pos[i]-imp, self.Force[:,i])
-        return (self.F, self.M)                   
+            self.rhs=dotX(e, self.M)
+        return (self.F, self.M, self.rhs)                   
 
 
     def twoCyn(self, c1, c2, d=0, nor=[0,0,1.0]):
@@ -303,7 +305,6 @@ class Robot:
         nlink=len(self.J_L)
         self.nlist=range(nlink)
         self.J=np.matrix(np.zeros((9,9)))    
-        self.Jb=np.matrix(np.zeros((3*nlink,nlink)))    
         self.e=np.matrix(np.zeros((3, nlink)))
         self.L_=np.matrix(np.zeros((3, nlink)))
         self.L=np.matrix(np.zeros((3, nlink)))
@@ -335,8 +336,9 @@ class Robot:
             if i>0:
                 self.dR_dtheta[i3:i3+3, :i]+=self.dR_dtheta[i3-3:i3, :i]  
         self.J[6:9,:6]=self.dR_dtheta[i3:i3+3,:]        
+        self.J[:6,6:9]=self.dR_dtheta[i3:i3+3,:].T
         FM=(self.rhs[6:], np.matrix([0.0,0.0,0.0]).T)
-        FM=(np.matrix([1.0,1.0,1.0]).T, np.matrix([0.0,0.0,0.0]).T)
+        FM=(np.matrix([1.0,1.0,1.0]).T, np.matrix([0.0,0.0,0.0]).T, None)
         tipLink=self.nlist[-1]
         self.dM.fill(0.0)
         self.dF.fill(0.0)
@@ -345,7 +347,8 @@ class Robot:
             i33=i3+3
             link=self.J_L[i][1]
             imp=link.Im.DH()[:3,3]
-            FMn=link.calF(FM, i==-1)
+            FMn=link.calF(FM, i==5)
+            self.rhs[i,0]=FMn[2]#dotX(self.e[:,i], FMn[1])
             if i<tipLink:
                 for j in self.nlist:
                     self.dF[i3:i33,j]+=self.dF[i33:i33+3,j]
@@ -365,9 +368,12 @@ class Robot:
                     self.dM[i3:i33,j]+=crossX(dl, link.Force[:,k])
                     self.dM[i3:i33,j]+=crossX(pos_imp, df)#self.dF[i3:i33,j])    
                     self.dF[i3:i33,j]+=df#link.dF_dR[:,k3:k33]*crossX(self.e[:,j], pos_imp)
-                    #if j<i:
-                    #    self.dF[i3:i33,j]+=link.dF_dR[:,k3:k33]*(self.dR_dtheta[i3-3:i3,j])
+            for j in self.nlist:
+                self.J[i,j]=dotX(self.e[:,i],self.dM[i3:i33,j])
+                if j<i: self.J[i,j]+=dotX(crossX(self.e[:,j], self.e[:,i]), FMn[1])
             FM=FMn    
+        print self.rhs.T    
+        print self.J    
         return self.dF        
     
     def numDF(self, thetas):
@@ -380,14 +386,14 @@ class Robot:
             d[i]=d[i]+delta
             self.forwardK(d)
             fm=(self.rhs[6:], np.matrix([0.0,0.0,0.0]).T)
-            fm=(np.matrix([1.0,1.0,1.0]).T, np.matrix([0.0,0.0,0.0]).T)
+            #fm=(np.matrix([1.0,1.0,1.0]).T, np.matrix([0.0,0.0,0.0]).T)
             for j in  self.nlist[::-1]:
                 fm=self.J_L[j][1].calF(fm)
                 p.append(fm[0].copy())
             d[i]=d[i]-2*delta
             self.forwardK(d)
             fm=(self.rhs[6:], np.matrix([0.0,0.0,0.0]).T)
-            fm=(np.matrix([1.0,1.0,1.0]).T, np.matrix([0.0,0.0,0.0]).T)
+            #fm=(np.matrix([1.0,1.0,1.0]).T, np.matrix([0.0,0.0,0.0]).T)
             for j in self.nlist[::-1]:
                 fm=self.J_L[j][1].calF(fm)
                 n.append(fm[0].copy())
@@ -615,18 +621,18 @@ class MainWindow(wx.Frame):
             df=self.robot.evalRhs_J()    
             dfn=self.robot.numDF(a)
             self.glwin.OnDraw()
-            print df
-            print df-dfn
+            #print df
+            #print df-dfn
                      
     def OnHome(self, evt):                 
-        a=[0, 0, 0, 90*d2r+0, 0, 0]
+        a=[0, 0, 0, 90*d2r+0, 90, 0]
         self.robot.forwardK(a)
         df=self.robot.evalRhs_J()    
-        dfn=self.robot.numDF(a)
+        #dfn=self.robot.numDF(a)
         self.glwin.OnDraw()
-        print df
-        print dfn
-        print df-dfn
+        #print df
+        #print dfn
+        #print df-dfn
 #if __name__=="__main__":
 #    DHR=((1, 0, 90*d2r, 1*0.2), (0, 1.0, 0.0, 1*0.2), (0, 1.0, 0.0, 1*0.2))
 #    robot=Robot(DHR)
