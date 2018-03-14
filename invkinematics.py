@@ -338,7 +338,7 @@ class Robot:
         self.J[6:9,:6]=self.dR_dtheta[i3:i3+3,:]        
         self.J[:6,6:9]=self.dR_dtheta[i3:i3+3,:].T
         FM=(self.rhs[6:], np.matrix([0.0,0.0,0.0]).T)
-        FM=(np.matrix([1.0,1.0,1.0]).T, np.matrix([0.0,0.0,0.0]).T, None)
+        #FM=(np.matrix([1.0,1.0,1.0]).T, np.matrix([0.0,0.0,0.0]).T, None)
         tipLink=self.nlist[-1]
         self.dM.fill(0.0)
         self.dF.fill(0.0)
@@ -372,10 +372,37 @@ class Robot:
                 self.J[i,j]=dotX(self.e[:,i],self.dM[i3:i33,j])
                 if j<i: self.J[i,j]+=dotX(crossX(self.e[:,j], self.e[:,i]), FMn[1])
             FM=FMn    
-        print self.rhs.T    
-        print self.J    
-        return self.dF        
+        return self.J        
     
+    def numDJ(self, thetas):
+        numJ=np.matrix(np.zeros((6,6)))    
+        delta=0.00001
+        for i in range(6):
+            p=[]
+            n=[]
+            d=[v for v in thetas]
+            d[i]=d[i]+delta
+            self.forwardK(d)
+            fm=(self.rhs[6:], np.matrix([0.0,0.0,0.0]).T)
+            for j in  self.nlist[::-1]:
+                fm=self.J_L[j][1].calF(fm)
+                p.append(fm[2].copy())
+            d[i]=d[i]-2*delta
+            self.forwardK(d)
+            fm=(self.rhs[6:], np.matrix([0.0,0.0,0.0]).T)
+            #fm=(np.matrix([1.0,1.0,1.0]).T, np.matrix([0.0,0.0,0.0]).T)
+            for j in self.nlist[::-1]:
+                fm=self.J_L[j][1].calF(fm)
+                n.append(fm[2].copy())
+            p=p[::-1]    
+            n=n[::-1]    
+            for j in  self.nlist[::-1]:
+                numJ[j, i]=(p[j]-n[j])/(2*delta) 
+        return  numJ        
+
+
+
+
     def numDF(self, thetas):
         dFN=np.matrix(np.zeros((3*6, 6)))
         delta=0.00001
@@ -619,20 +646,23 @@ class MainWindow(wx.Frame):
             a=[i*45, i*45, i*45, 90*d2r+i*120, i*120, i*0]
             self.robot.forwardK(a)
             df=self.robot.evalRhs_J()    
-            dfn=self.robot.numDF(a)
+            #dfn=self.robot.numDF(a)
+            dfn=self.robot.numDJ(a)
             self.glwin.OnDraw()
-            #print df
-            #print df-dfn
+            print df[:6,:6]
+            print dfn
+            print df[:6,:6]-dfn
                      
     def OnHome(self, evt):                 
         a=[0, 0, 0, 90*d2r+0, 90, 0]
         self.robot.forwardK(a)
         df=self.robot.evalRhs_J()    
         #dfn=self.robot.numDF(a)
+        dfn=self.robot.numDJ(a)
         self.glwin.OnDraw()
-        #print df
-        #print dfn
-        #print df-dfn
+        print df[:6,:6]
+        print dfn
+        print df[:6,:6]-dfn
 #if __name__=="__main__":
 #    DHR=((1, 0, 90*d2r, 1*0.2), (0, 1.0, 0.0, 1*0.2), (0, 1.0, 0.0, 1*0.2))
 #    robot=Robot(DHR)
