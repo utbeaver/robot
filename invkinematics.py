@@ -329,8 +329,8 @@ class Robot:
     def evalRhs_J(self, xyz=None):
         xyz0=self.forwardK()
         if xyz is not None:
-            print xyz, "desired"
-            print xyz0.T, "actual"
+            #print xyz, "desired"
+            #print xyz0.T, "actual"
             self.rhs[6:,0]=xyz0-np.matrix(xyz).T
         for i in self.nlist:
             self.e[:,i]=self.J_L[i][0].IM().DH()[:3,2]
@@ -676,7 +676,7 @@ class MainWindow(wx.Frame):
 
     def OnStatic(self, evt):
         a=[0, 0, 0, 0, 0, 0]
-        v=((1.8, 0.0, 1.6), (1.8, 0.1, 1.59))
+        v=((1.8, 0.0, 1.6), (1.8, 0.1, 1.4), (1.9, 0.0, 1.3), (1.7, 0.1, 1.3))
         for i in range(len(v)):
             aa=None
             if i==0: aa=a
