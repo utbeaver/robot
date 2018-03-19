@@ -5,27 +5,20 @@ from wx import *
 #np.set_printoptions(precision=8, formatter={'float': '{: 10.3f}'.format}, suppress=True)
 np.set_printoptions(linewidth=500)
 np.set_printoptions(precision=5, suppress=True)
-
-
 d2r=np.pi/180.0
 r2d=1.0/d2r
-
 def dotX(x, y):
     dxy=np.dot(x.getA1(), y.getA1())
     return dxy
-
 def crossX(x, y):
     dxy=np.cross(x.getA1(), y.getA1())
     return np.matrix(dxy).T
-
-
 class OBJ:
-    def __init__(self, filename, bx=1.0, by=0, bz=1.5, scale=0.2):
+    def __init__(self, filename, bx=1.0, by=0, bz=1.5, scale=0.5):
         """Loads a Wavefront OBJ file. """
         self.vertices = []
         self.normals = []
         self.faces = []
-
         for line in open(filename, "r"):
             if line.startswith('#'): continue
             values = line.split()
@@ -51,7 +44,6 @@ class OBJ:
                     self.normals[i-1]=self.normals[i-1]+n
         self.normals=[v/np.sqrt(v.T*v) for v in self.normals]            
                     
-
     def createList(self):        
         self.gl_list = glGenLists(1)
         glNewList(self.gl_list, GL_COMPILE)
@@ -67,7 +59,6 @@ class OBJ:
         glPolygonMode(GL_FRONT, GL_FILL);
         glEndList()
         return self.gl_list
-
 class Marker:
     def __init__(self, _name="baseM", _pos=np.matrix([[0.0,0.0,0.0]]).T, _prev=None):
         self.name=_name
@@ -84,7 +75,6 @@ class Marker:
         if _prev!=None:
             self.prevM=_prev
         self.P=self.pos
-
     def update(self, _m, xyz=[]):
         self.Rot=self.prevM.Rot*_m
         self.P=self.prevM.Rot*self.pos#+self.prevM.P
@@ -92,12 +82,10 @@ class Marker:
         self.dh[:3, 3]=self.P+self.prevM.dh[:3,3]
         ris=[self.prevM.Rot*r+self.prevM.dh[:3,3]  for r in xyz]
         return ris
-
     def DH(self): return self.dh
     def relP(self): return self.P
   
         
-
 class Joint:
     def __init__(self, _name, _J, val=0):
         self.name=_name
@@ -105,7 +93,6 @@ class Joint:
         self.Im=Marker(self.name+"Im", np.matrix([[0.0,0.0,0.0]]).T, self.Jm)
         self.val=val
         self.rotz=np.matrix([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]) 
-
     def update(self, a):
         c=np.cos(a)
         s=np.sin(a)
@@ -115,11 +102,7 @@ class Joint:
         self.rotz[1,1]=c
         self.rotz[1,0]=s
         self.Im.update(self.rotz)
-
     def IM(self): return self.Im
-
-
-
 class Link:
     def __init__(self, i, paras, work_, I=None, color=(1,1,1), last=False):
         self.name="link"+str(i)
@@ -147,7 +130,7 @@ class Link:
             if last == False:
                 temp=[np.matrix([[_a], [0], [self.d]]) for _a in np.linspace(0, self.a, 10)]
             else:    
-                temp=[np.matrix([[_a], [0], [self.d]]) for _a in np.linspace(0, self.a-0.5*self.a, 10)]
+                temp=[np.matrix([[_a], [0], [self.d]]) for _a in np.linspace(0, self.a-0.5*self.a, 2)]
             self.da=self.da+temp[1:]
         self.update()
         self.pos=None
@@ -183,16 +166,13 @@ class Link:
                 if flag!=0: break    
         if self.last==True: flag=0        
         return flag        
-
-
     def JM(self): return self.Jm    
         
     def update(self):
         self.pos=self.Jm.update(self.rotx, self.da)
-
     def calF(self, FM, flag=False):
-        Coffs=0.0
-        if self.K>0.1: Coffs=1.0/self.K
+        Coffs=1.0#self.K*self.K
+        #if self.K>0.1: Coffs=1.0/self.K
         if flag:
             self.flag=flag
             self.forcei=np.matrix(np.zeros((3*self.numMesh, len(self.work.normals))))
@@ -238,8 +218,6 @@ class Link:
             self.M=self.M+crossX(self.pos[i]-imp, self.Force[:,i])
             self.rhs=dotX(e, self.M)
         return (self.F, self.M, self.rhs)                   
-
-
     def twoCyn(self, c1, c2, d=0, nor=[0,0,1.0]):
         leng=len(c1)
         glBegin(GL_QUADS)
@@ -263,7 +241,6 @@ class Link:
         glNormal3fv([v for v in nor])
         for v in c2: glVertex3fv(v)
         glEnd()        
-
     def geoInfo(self):  
         _r=self.r
         scale=1.5
@@ -317,7 +294,6 @@ class Link:
             glCallList(self.calllist2)            
         glPopAttrib()    
         glPopMatrix()
-
 class Robot:
     def __init__(self, DHR, work, colors):
         self.baseM=Marker()
@@ -350,7 +326,6 @@ class Robot:
         self.dM=np.matrix(np.zeros((3*nlink, nlink)))
         self.dF=np.matrix(np.zeros((3*nlink, nlink)))
         self.thetas=np.matrix(np.zeros((nlink+3, 1)))
-
     def initialize(self, thetas):
         for i in self.nlist:  self.thetas[i,0]=thetas[i] 
         self.forwardK()
@@ -388,7 +363,7 @@ class Robot:
                 print flag, i
                 break
             imp=link.Im.DH()[:3,3]
-            FMn=link.calF(FM, i==-1)
+            FMn=link.calF(FM, i==1)
             self.rhs[i,0]=FMn[2]
             if i<tipLink:
                 for j in self.nlist:
@@ -414,33 +389,38 @@ class Robot:
                 if j<i: self.J[i,j]+=dotX(crossX(self.e[:,j], self.e[:,i]), FMn[1])
             FM=FMn    
         return (self.J, self.rhs, flag)        
-
     def SolvStatic(self, txyz, thetas=None):
         self.forwardK(thetas)
         tol=1.0e-4
         maxr=1.0e10
-        lmda=0.99
         factor=1.0/0.75
         converged=0
         ori_states=[self.thetas[i,0] for i in range(6)]
         flag=0
+        _1d=np.pi/180.0*0.1
         while converged==0:
             flag=0
             for i in range(6):
                 self.thetas[i,0]=ori_states[i]
             factor*=0.75
             i=0
-            while i < 20:  
+            while i < 100:  
                 J, rhs, flag=self.evalRhs_J(txyz)
                 if flag == 1:
                     break
-                DX=J.I*rhs*factor
-                self.thetas-=DX
+                DX=J.I*rhs
+                DX[:6,0]=DX[:6,0]*factor    
                 maxv=np.absolute(DX[:6,0]).max()
+                scale=1.0
+                if maxv>_1d:
+                    scale=_1d/maxv
+                DX[:6,0]=DX[:6,0]*scale    
                 maxv1=np.absolute(DX[:,0]).max()
                 maxr=np.absolute(rhs[6:,0]).max()
+                self.thetas[6:,0]=DX[6:,0]
+                self.thetas[:6,0]-=DX[:6,0]
                 i=i+1
-                if maxr<tol or maxv<tol:
+                if (maxr<tol or maxv<tol and (i>1)):
                     converged=1
                     break
                 if factor <0.01: facctor=2.0/0.75    
@@ -477,10 +457,6 @@ class Robot:
             for j in  self.nlist[::-1]:
                 numJ[j, i]=(p[j]-n[j])/(2*delta) 
         return  numJ        
-
-
-
-
     def numDF(self, thetas):
         dFN=np.matrix(np.zeros((3*6, 6)))
         delta=0.00001
@@ -509,8 +485,6 @@ class Robot:
                 dFN[j*3:j*3+3, i]=(p[j]-n[j])/(2*delta) 
         return dFN
             
-
-
     def forwardK(self, thetas=None):
         if thetas is not None:
             for i in self.nlist:  self.thetas[i,0]=thetas[i, 0] 
@@ -519,12 +493,10 @@ class Robot:
             jl[0].update(self.thetas[i,0]) #joint 
             jl[1].update()  #Link
         return jl[1].Jm.DH()[:3,3]    
-
     def draw(self):
         for i in self.nlist:#range(len(self.J_L)):
             jl=self.J_L[i]
             jl[1].draw()
-
 class RobotDrawingBoard(glcanvas.GLCanvas):
     def __init__(self, parent, robot_, work_=None):
         glcanvas.GLCanvas.__init__(self, parent, -1, style=wx.WANTS_CHARS)
@@ -544,7 +516,6 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.init=False
         
-
     def InitGL(self):
         self.ViewControl()
         glMatrixMode(GL_MODELVIEW)
@@ -561,7 +532,6 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
         #glEnable(GL_PROGRAM_POINT_SIZE_EXT)
         glPointSize(10)
         
-
         self.axes=glGenLists(1)
         glNewList(self.axes, GL_COMPILE)
         glBegin(GL_LINES)
@@ -578,11 +548,9 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
         glEndList()
         self.wklist=self.work.createList()
         #self.OnDraw()
-
     def onKeyPressUp(self, evt):
         self.keychar=None
         evt.Skip()
-
     def onKeyPress(self, evt):
         keycode=evt.GetKeyCode()
         if keycode<256:
@@ -614,7 +582,6 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
 #        self.Refresh()
         self.Update()
         evt.Skip()
-
     def ViewControl(self):
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
@@ -646,7 +613,6 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
             glMultMatrixf(prem)   
         elif self.keychar==wx.WXK_HOME:
             glLoadIdentity()
-
     def OnPaint(self, evt):
         self.SetCurrent()
         if not self.init:
@@ -654,7 +620,6 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
             self.init = True
         self.OnDraw()
         evt.Skip()
-
     def OnDraw(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glCallList(self.axes)
@@ -665,7 +630,6 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
     def OnSize(self, event):
         wx.CallAfter(self.DoSetViewport)
         event.Skip()
-
     def DoSetViewport(self):
         if self.IsShown():
             self.SetCurrent()
@@ -673,7 +637,6 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
             glMatrixMode(GL_PROJECTION)
             glViewport(0, 0, size.width, size.height)
             glMatrixMode(GL_MODELVIEW)
-
 class MainWindow(wx.Frame):
     def __init__(self, parent = None,id = -1, title = "Syringa Robotics Inc."):        
         wx.Frame.__init__(
@@ -719,7 +682,6 @@ class MainWindow(wx.Frame):
         self.Bind(wx.EVT_MENU, self.OnReplay, id=actids[3])
         menubar.Append(actionmenu,"&Actions")
         self.animation=[]
-
         self.SetMenuBar(menubar)
         self.Show(True)
         
@@ -732,18 +694,19 @@ class MainWindow(wx.Frame):
         a=[0, 0, 0, 0, 0, 0]
         a=[0, 25*d2r, -25*d2r, 0*d2r+0, 0*d2r, 90*d2r]
         s=self.robot.forwardK(np.matrix(a).T).copy()
+        self.robot.SolvStatic(s)
         vv=((1.8, 0.1, 2.0), (1.7, 0.2, 1.6), (1.5, 0.4, 1.5), (1.8, 0.1, 1.42))
         vv=(self.w_ork.vertices[1], self.w_ork.vertices[18], self.w_ork.vertices[2],  self.w_ork.vertices[1])  #last idx from 17
         iii=0
         num=25
-        for v in vv[:4]: 
+        for v in vv[:1]: 
             e=np.matrix(v).T
             e=v.copy()
             delta=(e-s)/float(num)
             for ii in range(num+1):
                 val=s+delta*ii
                 if iii==0:
-                    thetas=self.robot.SolvStatic(val, np.matrix(a).T)
+                    thetas=self.robot.SolvStatic(val)#, np.matrix(a).T)
                     iii=1
                 else:    
                     thetas=self.robot.SolvStatic(val)
@@ -756,7 +719,6 @@ class MainWindow(wx.Frame):
         for ani in self.animation:
             self.robot.forwardK(ani)
             self.glwin.OnDraw()
-
     def OnMotion(self, evt):
         for i in np.linspace(-1, 1, 100)*d2r:
             a=[i*45, i*45, i*45, 90*d2r+i*120, i*120, i*0]
