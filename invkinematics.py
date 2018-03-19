@@ -20,7 +20,7 @@ def crossX(x, y):
 
 
 class OBJ:
-    def __init__(self, filename, bx=1.0, by=0, bz=1, scale=0.7):
+    def __init__(self, filename, bx=1.0, by=0, bz=1.5, scale=0.2):
         """Loads a Wavefront OBJ file. """
         self.vertices = []
         self.normals = []
@@ -56,7 +56,6 @@ class OBJ:
         self.gl_list = glGenLists(1)
         glNewList(self.gl_list, GL_COMPILE)
         glFrontFace(GL_CCW)
-        #glPolygonMode(GL_BACK, GL_LINE);
         glPolygonMode(GL_FRONT, GL_FILL);
         for face in self.faces:
             vertices, normals= face
@@ -122,8 +121,10 @@ class Joint:
 
 
 class Link:
-    def __init__(self, _name, paras, work_, I=None, color=(1,1,1)):
-        self.name=_name
+    def __init__(self, i, paras, work_, I=None, color=(1,1,1), last=False):
+        self.name="link"+str(i)
+        self.K=i
+        self.last=last
         self.color=color
         self.m=1.0
         self.scale=0.5#
@@ -143,7 +144,10 @@ class Link:
         if np.abs(self.d)>0.0:
             self.da.append(np.matrix([[0],[0], [self.d]]))    
         if self.a>0:
-            temp=[np.matrix([[_a], [0], [self.d]]) for _a in np.linspace(0, self.a, 10)]
+            if last == False:
+                temp=[np.matrix([[_a], [0], [self.d]]) for _a in np.linspace(0, self.a, 10)]
+            else:    
+                temp=[np.matrix([[_a], [0], [self.d]]) for _a in np.linspace(0, self.a-0.5*self.a, 10)]
             self.da=self.da+temp[1:]
         self.update()
         self.pos=None
@@ -156,13 +160,39 @@ class Link:
         self.M=np.matrix([0.0,0.0,0.0]).T
         self.flag=(1==0)
     
+    def CheckNodes(self):
+        #check if 
+        flag=0
+        scale=1.0
+        if self.last==True: scale=0.0
+        for i in range(self.numVertex):
+            d_=self.work.vertices[i]-self.Jm.DH()[:3,3]
+            d=self.Jm.DH()[:3,:3].T*d_
+            dxy=np.sqrt(d[:2,0].T*d[:2,0])
+            if dxy<self.r:
+                if self.d>=0 and d[2,0]>self.r and d[2,0]<(self.d+self.r):
+                    flag=1
+                if self.d<0 and d[2,0]<self.r and d[2,0]>(self.d-self.r):
+                    flag=1
+                if flag!=0: break    
+            d[2,0]-=self.d    
+            dyz=np.sqrt(d[1:,0].T*d[1:,0])
+            if dyz<self.r:
+                if d[0,0]>self.r and d[0,0]<(self.a*(0.5+0.5*scale)+self.r*scale):
+                    flag=1
+                if flag!=0: break    
+        if self.last==True: flag=0        
+        return flag        
+
+
     def JM(self): return self.Jm    
         
     def update(self):
         self.pos=self.Jm.update(self.rotx, self.da)
 
     def calF(self, FM, flag=False):
-        Coffs=1
+        Coffs=0.0
+        if self.K>0.1: Coffs=1.0/self.K
         if flag:
             self.flag=flag
             self.forcei=np.matrix(np.zeros((3*self.numMesh, len(self.work.normals))))
@@ -299,7 +329,7 @@ class Robot:
         for dhr_ in DHR:
             i=i+1
             I=Joint("J"+str(i), J)
-            lnk=Link("lnk"+str(i), dhr_, self.work, I.IM(), self.colors[i-1])
+            lnk=Link(i, dhr_, self.work, I.IM(), self.colors[i-1], i==len(DHR))
             J=lnk.Jm
             self.J_L.append((I, lnk))
         nlink=len(self.J_L)
@@ -326,12 +356,10 @@ class Robot:
         self.forwardK()
         
         
-    def evalRhs_J(self, xyz=None):
+    def evalRhs_J(self, txyz=None):
         xyz0=self.forwardK()
-        if xyz is not None:
-            #print xyz, "desired"
-            #print xyz0.T, "actual"
-            self.rhs[6:,0]=xyz0-np.matrix(xyz).T
+        if txyz is not None:
+            self.rhs[6:,0]=xyz0-txyz
         for i in self.nlist:
             self.e[:,i]=self.J_L[i][0].IM().DH()[:3,2]
             self.L_[:,i]=self.J_L[i][0].IM().DH()[:3,3]
@@ -355,6 +383,10 @@ class Robot:
             i3=i*3
             i33=i3+3
             link=self.J_L[i][1]
+            flag=link.CheckNodes()
+            if flag!=0:
+                print flag, i
+                break
             imp=link.Im.DH()[:3,3]
             FMn=link.calF(FM, i==-1)
             self.rhs[i,0]=FMn[2]
@@ -381,22 +413,40 @@ class Robot:
                 self.J[i,j]=dotX(self.e[:,i],self.dM[i3:i33,j])
                 if j<i: self.J[i,j]+=dotX(crossX(self.e[:,j], self.e[:,i]), FMn[1])
             FM=FMn    
-        return (self.J, self.rhs)        
+        return (self.J, self.rhs, flag)        
 
     def SolvStatic(self, txyz, thetas=None):
         self.forwardK(thetas)
-        tol=1.0e-5
-        maxv=1.0e10
-        #while maxv > tol:  
-        for i in range(15):
-            J, rhs=self.evalRhs_J(txyz)
-            #print J
-            #print rhs.T, "<---RHS"
-            DX=J.I*rhs
-            #print DX.T, "<---DX"
-            maxv=-100.0
-            self.thetas-=DX
-            maxv=np.absolute(DX).max()
+        tol=1.0e-4
+        maxr=1.0e10
+        lmda=0.99
+        factor=1.0/0.75
+        converged=0
+        ori_states=[self.thetas[i,0] for i in range(6)]
+        flag=0
+        while converged==0:
+            flag=0
+            for i in range(6):
+                self.thetas[i,0]=ori_states[i]
+            factor*=0.75
+            i=0
+            while i < 20:  
+                J, rhs, flag=self.evalRhs_J(txyz)
+                if flag == 1:
+                    break
+                DX=J.I*rhs*factor
+                self.thetas-=DX
+                maxv=np.absolute(DX[:6,0]).max()
+                maxv1=np.absolute(DX[:,0]).max()
+                maxr=np.absolute(rhs[6:,0]).max()
+                i=i+1
+                if maxr<tol or maxv<tol:
+                    converged=1
+                    break
+                if factor <0.01: facctor=2.0/0.75    
+            if flag==0: print maxv, maxr, factor, i 
+        return self.thetas+DX    
+            
         
         
     
@@ -406,21 +456,22 @@ class Robot:
         for i in range(6):
             p=[]
             n=[]
-            d=[v for v in thetas]
-            d[i]=d[i]+delta
+            d=np.matrix([v for v in thetas]).T
+            d[i,0]=d[i,0]+delta
             self.forwardK(d)
             fm=(self.rhs[6:], np.matrix([0.0,0.0,0.0]).T)
             for j in  self.nlist[::-1]:
                 fm=self.J_L[j][1].calF(fm)
                 p.append(fm[2].copy())
-            d[i]=d[i]-2*delta
+            d[i,0]=d[i,0]-2*delta
             self.forwardK(d)
             fm=(self.rhs[6:], np.matrix([0.0,0.0,0.0]).T)
             #fm=(np.matrix([1.0,1.0,1.0]).T, np.matrix([0.0,0.0,0.0]).T)
             for j in self.nlist[::-1]:
                 fm=self.J_L[j][1].calF(fm)
                 n.append(fm[2].copy())
-            self.forwardK(thetas)
+            d[i,0]=d[i,0]+delta
+            self.forwardK(d)
             p=p[::-1]    
             n=n[::-1]    
             for j in  self.nlist[::-1]:
@@ -462,10 +513,9 @@ class Robot:
 
     def forwardK(self, thetas=None):
         if thetas is not None:
-            for i in self.nlist:  self.thetas[i,0]=thetas[i] 
+            for i in self.nlist:  self.thetas[i,0]=thetas[i, 0] 
         for i in self.nlist:
             jl=self.J_L[i]
-            #print self.thetas[i,0]
             jl[0].update(self.thetas[i,0]) #joint 
             jl[1].update()  #Link
         return jl[1].Jm.DH()[:3,3]    
@@ -634,15 +684,15 @@ class MainWindow(wx.Frame):
         colors=((1,0,0), (0,1,0.5), (0,0,1), (1,1,0), (1,0,1), (0,1,1))
         DHR=((2.0, 0.0, 90*d2r, 1*scale), 
                 (0.2, 1.0, 0.0, 1*scale), 
-                (-0.2, 1.0, 0.0*d2r, 1*scale), 
-                (0.2, 0.0, 90.0*d2r, 1*scale),
-                (0.4, 0.0, 90*d2r, 1*scale), 
-                (0.2, 0.1, 90*d2r, 1*scale)
+                (0.2, 1.0, 0.0*d2r, 1*scale), 
+                (0.2, 0.0, 90.0*d2r, 1*scale*0.5),
+                (0.4, 0.0, 90*d2r, 1*scale*0.5), 
+                (0.1, 0.2, 90*d2r, 1*scale*0.2)
                 )
-        w_ork=OBJ("dodecahedron.obj")
-        self.robot=Robot(DHR, w_ork, colors[:6])
-        self.robot.forwardK([0,0,0, 0,0,0])
-        self.glwin=RobotDrawingBoard(self, self.robot, w_ork)
+        self.w_ork=OBJ("dodecahedron.obj")
+        self.robot=Robot(DHR, self.w_ork, colors[:6])
+        self.robot.forwardK(np.matrix([0,0,0, 0,0,0]).T)
+        self.glwin=RobotDrawingBoard(self, self.robot, self.w_ork)
         box = wx.BoxSizer(wx.HORIZONTAL)
         box.Add(self.glwin, 1, wx.ALIGN_CENTRE|wx.ALL|wx.EXPAND, 5)
         self.SetSizer(box)    
@@ -658,14 +708,17 @@ class MainWindow(wx.Frame):
        
         actids=[]
         actionmenu=wx.Menu()
-        for i in range(3):actids.append(wx.NewId())
+        for i in range(4):actids.append(wx.NewId())
         actionmenu.Append(actids[0], "Home", "Initial Posiition")
         self.Bind(wx.EVT_MENU, self.OnHome, id=actids[0])
         actionmenu.Append(actids[1], "Motion", "Motion")
         self.Bind(wx.EVT_MENU, self.OnMotion, id=actids[1])
         actionmenu.Append(actids[2], "Static", "Static")
         self.Bind(wx.EVT_MENU, self.OnStatic, id=actids[2])
+        actionmenu.Append(actids[3], "Replay", "Replay")
+        self.Bind(wx.EVT_MENU, self.OnReplay, id=actids[3])
         menubar.Append(actionmenu,"&Actions")
+        self.animation=[]
 
         self.SetMenuBar(menubar)
         self.Show(True)
@@ -675,18 +728,39 @@ class MainWindow(wx.Frame):
         evt.Skip()
 
     def OnStatic(self, evt):
+        self.animation=[]
         a=[0, 0, 0, 0, 0, 0]
-        v=((1.8, 0.0, 1.6), (1.8, 0.1, 1.4), (1.9, 0.0, 1.3), (1.7, 0.1, 1.3))
-        for i in range(len(v)):
-            aa=None
-            if i==0: aa=a
-            self.robot.SolvStatic(v[i], aa)
-            self.glwin.OnDraw()
+        a=[0, 25*d2r, -25*d2r, 0*d2r+0, 0*d2r, 90*d2r]
+        s=self.robot.forwardK(np.matrix(a).T).copy()
+        vv=((1.8, 0.1, 2.0), (1.7, 0.2, 1.6), (1.5, 0.4, 1.5), (1.8, 0.1, 1.42))
+        vv=(self.w_ork.vertices[1], self.w_ork.vertices[18], self.w_ork.vertices[2],  self.w_ork.vertices[1])  #last idx from 17
+        iii=0
+        num=25
+        for v in vv[:4]: 
+            e=np.matrix(v).T
+            e=v.copy()
+            delta=(e-s)/float(num)
+            for ii in range(num+1):
+                val=s+delta*ii
+                if iii==0:
+                    thetas=self.robot.SolvStatic(val, np.matrix(a).T)
+                    iii=1
+                else:    
+                    thetas=self.robot.SolvStatic(val)
+                self.glwin.OnDraw()
+                self.animation.append(thetas)
+            s=e.copy()    
+        print "finish"    
         
+    def OnReplay(self, evt):
+        for ani in self.animation:
+            self.robot.forwardK(ani)
+            self.glwin.OnDraw()
+
     def OnMotion(self, evt):
         for i in np.linspace(-1, 1, 100)*d2r:
             a=[i*45, i*45, i*45, 90*d2r+i*120, i*120, i*0]
-            self.robot.forwardK(a)
+            self.robot.forwardK(np.matrix(a).T)
             df=self.robot.evalRhs_J()[0]    
             #dfn=self.robot.numDF(a)
             dfn=self.robot.numDJ(a)
@@ -696,8 +770,8 @@ class MainWindow(wx.Frame):
             print df[:6,:6]-dfn
                      
     def OnHome(self, evt):                 
-        a=[0, 0, 0, 90*d2r+0, 90, 0]
-        self.robot.forwardK(a)
+        a=[0, 0, 0, 0*d2r+0, 90*d2r, 90*d2r]
+        self.robot.forwardK(np.matrix(a).T)
         df=self.robot.evalRhs_J()[0]    
         #dfn=self.robot.numDF(a)
         dfn=self.robot.numDJ(a)
