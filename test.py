@@ -197,7 +197,7 @@ class Link:
         self.scaleK=NK
 
     def calF(self, FM, flag=False, robot=None):
-        Coffs=1.0*self.scaleK*self.K/self.numMesh
+        Coffs=1.0
 	print 50*"X"+self.name
         self.F=FM[0].copy()
         self.M=FM[1].copy()
@@ -215,11 +215,11 @@ class Link:
         if robot is not None:
             if self.K<robot.nlist[-1]:  #if not the last link, get the J from upper one
                 for j in robot.nlist:
-                    self.dF_dT[:,j]+=robot.JL[self.K+1][1].dF_dT[:,j]
-                    self.dM_dT[:,j]+=robot.JL[self.K+1][1].dM_dT[:,j]
+                    self.dF_dT[:,j]+=robot.J_L[self.K+1][1].dF_dT[:,j]
+                    self.dM_dT[:,j]+=robot.J_L[self.K+1][1].dM_dT[:,j]
                     self.dM_dT[:,j]+=crossX(L, self.dF_dT[:,j])
-            for i in range(self.K+1):
-                self.dM_dT[:,i]+=crossX(crossX(robot.e[:,i], L), FM[0])
+            for j in range(self.K+1):
+                self.dM_dT[:,j]+=crossX(crossX(robot.e[:,j], L), self.F)
         VsIn1=[]
         rr=self.r*self.r
         if self.nd is not None:
@@ -227,44 +227,46 @@ class Link:
 	        dr=Txm(self.work.vertices[i], self.Jm)
                 if dr[2,0]<-self.r or dr[2,0]>self.nd+self.r: continue
                 VsIn1.append(i)
-        print VsIn1, "VsIn1"         
+        #print VsIn1, "VsIn1"         
         VsIn2=[]
         ez=self.geo.DH()[:3,2]
         R=self.geo.DH()[:3,3]
         for i in range(self.numVertex):
             xi=self.work.vertices[i]
+            ni=self.work.normals[i]
 	    dr=Txm(xi, self.geo)
             if dr[2,0]<-self.r or dr[2,0]>self.a+self.r: continue
             rg=R-xi
-            re=(rg.T*ez)*ez
+            re=dotX(rg,ez)*ez
             r=rg-re
-            r2=r.T*r
+            r2=dotX(r,r)
             a2=self.r*self.r
-            Flg=1.0/((r2-a2)*np.sqrt(r2))*r
+            Flg=1.0/((r2-a2)*np.sqrt(r2))*r*Coffs
             self.Force1[:3,0]+=Flg
             self.M1[:3,0]+=crossX(Lg-re, Flg)
             VsIn2.append(i)
             if robot is not None:
-                dRg_dtheta=robot.dRg_dtheta[3*self.K*3:self.K*3+3,:]
+                dRg_dtheta=robot.dRg_dtheta[self.K*3:self.K*3+3,:]
                 b2=1/((r2-a2)*np.sqrt(r2))
                 b1=b2*b2*(a2-3*r2)
                 for j in range(self.K+1):
                     dez_dT=crossX(robot.e[:,j],ez)
                     dLg_dT=crossX(robot.e[:,j], Lg)
                     dRg_dt=dRg_dtheta[:,j]
-                    dre_dt=(dRg_dt.T*ez)*ez-(rg.T*dez_dT)*ez-(rg.T*ez)*dez_dT
+                    dre_dt=dotX(dRg_dt, ez)*ez+dotX(rg,dez_dT)*ez+dotX(rg,ez)*dez_dT
                     drv_dtheta=dRg_dt-dre_dt
-                    dFlg=b1*(r.T*drv_dtheta)/np.sqrt(r2)*r+b2*drv_dtheta
+                    dFlg=b1*dotX(r,drv_dtheta)/np.sqrt(r2)*r+b2*drv_dtheta
+                    dFlg=dFlg*Coffs
                     self.dF_dT[:3,j]+=dFlg
-                    self.dM_dT[:3,j]+=crossX(dLg_dT-dre_dt, Flg))+crossX(Lg-re, dFlg)  
+                    self.dM_dT[:3,j]+=crossX(dLg_dT-dre_dt, Flg)+crossX(Lg-re, dFlg)  
         self.F+=self.Force1[:3,0]    
         self.M+=self.M1[:3,0]
-        print VsIn2, "VsIn2"         
+        #print VsIn2, "VsIn2"         
         self.rhs=dotX(e, self.M)
         if robot is not None:
             for j in robot.nlist:
-                self.J[0,j]=robot.e[:,self.K].T*self.dM_dT[:,j]
-                if j<self.K: self.J[0,j]+=crossX(robot.e[:,j], robot.e[:self.K]).T*Fmn[1]
+                self.J[0,j]=dotX(robot.e[:,self.K],self.dM_dT[:,j])
+                if j<self.K: self.J[0,j]+=dotX(crossX(robot.e[:,j], robot.e[:,self.K]),self.M)
         return (self.F, self.M, self.rhs)                   
 
     def twoCyn(self, c1, c2, d=0, nor=[0,0,1.0]):
@@ -334,11 +336,11 @@ class Robot:
         self.J_L=[]
         i=0
         for dhr_ in DHR:
-            i=i+1
             I=Joint("J"+str(i), J)
             lnk=Link(i, dhr_, self.work, I.IM(), self.colors[i-1], i==len(DHR))
             J=lnk.Jm
             self.J_L.append((I, lnk))
+            i=i+1
         nlink=len(self.J_L)
         self.nlink=nlink
         self.nlist=range(nlink)
@@ -399,15 +401,19 @@ class Robot:
         #    print 50*"X"
         self.J[6:9,:6]=self.dR_dtheta[i3:i3+3,:]        
         self.J[:6,6:9]=self.dR_dtheta[i3:i3+3,:].T
+        FM=(np.matrix([100.0,100.0,100.0]).T, np.matrix([0.0,0.0,0.0]).T)
         FM=(self.thetas[6:,0], np.matrix([0.0,0.0,0.0]).T)
-        #FM=(np.matrix([100.0,100.0,100.0]).T, np.matrix([0.0,0.0,0.0]).T)
         tipLink=self.nlist[-1]
         self.dM.fill(0.0)
         self.dF.fill(0.0)
         for i in self.nlist[::-1]:
-            i3=i*3
-            i33=i3+3
+            link=self.J_L[i][1]
             FMn=link.calF(FM, i==-1, self)
+            self.rhs[i,0]=FMn[2]
+            self.J[i,:6]=link.J[0,:]
+            FM=FMn
+        print self.J[:6,:6]
+        print self.e
         #for i in self.nlist[::-1]:
         #    i3=i*3
         #    i33=i3+3
@@ -443,7 +449,7 @@ class Robot:
         #        if j<i: self.J[i,j]+=crossX(self.e[:,j], self.e[:,i]).T*FMn[1]
         #    FM=FMn    
 
-        return (self.J, self.rhs, flag)        
+        return (self.J, self.rhs, 1)        
 
     def SolvStatic(self, txyz, thetas=None):
         self.forwardK(thetas)
@@ -475,9 +481,8 @@ class Robot:
                 if flag == 1:
                     break
                 DX=J.I*rhs
-                print DX.T, "DX", i
-                DX[6:,0]=DX[6:,0]*hscale    
                 DX[:6,0]=DX[:6,0]*factor    
+                iX[6:,0]=DX[6:,0]*hscale    
                 DX[6:,0]=DX[6:,0]*factor    
                 maxv=np.absolute(DX[:6,0]).max()
                 scale=1.0
