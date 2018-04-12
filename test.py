@@ -155,6 +155,7 @@ class Link:
         self.Force1=np.matrix(np.zeros((3,1)))
         self.M1=np.matrix(np.zeros((3,1)))
         self.Force2=np.matrix(np.zeros((3,1)))
+        self.M2=np.matrix(np.zeros((3,1)))
         self.dF_dT=np.matrix(np.zeros((3, 6)))
         self.dM_dT=np.matrix(np.zeros((3, 6)))
         self.F=np.matrix([0.0,0.0,0.0]).T
@@ -198,7 +199,8 @@ class Link:
 
     def calF(self, FM, flag=False, robot=None):
         Coffs=1.0
-	print 50*"X"+self.name
+        if robot is not None:
+	    print 50*"X"+self.name
         self.F=FM[0].copy()
         self.M=FM[1].copy()
         imp=self.Im.DH()[:3,3]
@@ -211,6 +213,7 @@ class Link:
         self.Force1.fill(0.0)
         self.M1.fill(0.0)
         self.Force2.fill(0.0)
+        self.M2.fill(0.0)
         self.M+=crossX(L, self.F)
         if robot is not None:
             if self.K<robot.nlist[-1]:  #if not the last link, get the J from upper one
@@ -220,48 +223,54 @@ class Link:
                     self.dM_dT[:,j]+=crossX(L, self.dF_dT[:,j])
             for j in range(self.K+1):
                 self.dM_dT[:,j]+=crossX(crossX(robot.e[:,j], L), self.F)
+            dR_dtheta=(robot.dRg_dtheta, robot.dR_dtheta)
         VsIn1=[]
-        rr=self.r*self.r
-        if self.nd is not None:
+        a2=self.r*self.r
+        ms=(self.geo, self.JM())
+        ad=(self.a, self.nd)
+        force=(self.Force1, self.Force2)
+        moment=(self.M1, self.M2)
+        for ii in [0,1]:
+            visin=[]
+            m=ms[ii]
+            ez=m.DH()[:3,2]
+            R=m.DH()[:3,3]
+            L=m.relP()
+            if ad[ii] is None: continue
             for i in range(self.numVertex):
-	        dr=Txm(self.work.vertices[i], self.Jm)
-                if dr[2,0]<-self.r or dr[2,0]>self.nd+self.r: continue
-                VsIn1.append(i)
-        #print VsIn1, "VsIn1"         
-        VsIn2=[]
-        ez=self.geo.DH()[:3,2]
-        R=self.geo.DH()[:3,3]
-        for i in range(self.numVertex):
-            xi=self.work.vertices[i]
-            ni=self.work.normals[i]
-	    dr=Txm(xi, self.geo)
-            if dr[2,0]<-self.r or dr[2,0]>self.a+self.r: continue
-            rg=R-xi
-            re=dotX(rg,ez)*ez
-            r=rg-re
-            r2=dotX(r,r)
-            a2=self.r*self.r
-            Flg=1.0/((r2-a2)*np.sqrt(r2))*r*Coffs
-            self.Force1[:3,0]+=Flg
-            self.M1[:3,0]+=crossX(Lg-re, Flg)
-            VsIn2.append(i)
-            if robot is not None:
-                dRg_dtheta=robot.dRg_dtheta[self.K*3:self.K*3+3,:]
-                b2=1/((r2-a2)*np.sqrt(r2))
-                b1=b2*b2*(a2-3*r2)
-                for j in range(self.K+1):
-                    dez_dT=crossX(robot.e[:,j],ez)
-                    dLg_dT=crossX(robot.e[:,j], Lg)
-                    dRg_dt=dRg_dtheta[:,j]
-                    dre_dt=dotX(dRg_dt, ez)*ez+dotX(rg,dez_dT)*ez+dotX(rg,ez)*dez_dT
-                    drv_dtheta=dRg_dt-dre_dt
-                    dFlg=b1*dotX(r,drv_dtheta)/np.sqrt(r2)*r+b2*drv_dtheta
-                    dFlg=dFlg*Coffs
-                    self.dF_dT[:3,j]+=dFlg
-                    self.dM_dT[:3,j]+=crossX(dLg_dT-dre_dt, Flg)+crossX(Lg-re, dFlg)  
-        self.F+=self.Force1[:3,0]    
-        self.M+=self.M1[:3,0]
-        #print VsIn2, "VsIn2"         
+                xi=self.work.vertices[i]
+                ni=self.work.normals[i]
+	        dr=Txm(xi, m)
+                if dr[2,0]<-self.r or dr[2,0]>ad[ii]+self.r: continue
+                rg=R-xi
+                re=dotX(rg,ez)*ez
+                r=rg-re
+                r_n=dotX(r, ni)
+                if r_n<0.0: continue
+                visin.append(i)
+                r2=dotX(r,r)
+                Flg0=1.0/((r2-a2)*np.sqrt(r2))*r*Coffs
+                Flg=r_n*Flg0
+                force[ii][:3,0]+=Flg
+                moment[ii][:3,0]+=crossX(L-re, Flg)
+                if robot is not None:
+                    dRdtheta=dR_dtheta[ii][self.K*3:self.K*3+3,:]
+                    b2=1/((r2-a2)*np.sqrt(r2))
+                    b1=b2*b2*(a2-3*r2)
+                    for j in range(self.K+1):
+                        dez_dT=crossX(robot.e[:,j],ez)
+                        dL_dT=crossX(robot.e[:,j], L)
+                        dR_dt=dRdtheta[:,j]
+                        dre_dt=dotX(dR_dt, ez)*ez+dotX(rg,dez_dT)*ez+dotX(rg,ez)*dez_dT
+                        drv_dtheta=dR_dt-dre_dt
+                        dr_n_dt=dotX(drv_dtheta, ni)
+                        dFlg=r_n*(b1*dotX(r,drv_dtheta)/np.sqrt(r2)*r+b2*drv_dtheta)+dr_n_dt*Flg0
+                        dFlg=dFlg*Coffs
+                        self.dF_dT[:3,j]+=dFlg
+                        self.dM_dT[:3,j]+=crossX(dL_dT-dre_dt, Flg)+crossX(L-re, dFlg)  
+            self.F+=force[ii][:3,0]#self.Force2[:3,0]    
+            self.M+=moment[ii][:3,0]#self.M2[:3,0]
+            if robot: print visin, ii
         self.rhs=dotX(e, self.M)
         if robot is not None:
             for j in robot.nlist:
@@ -394,14 +403,9 @@ class Robot:
             if i>0:
                 self.dR_dtheta[i3:i3+3, :i]+=self.dR_dtheta[i3-3:i3, :i]  
                 self.dRg_dtheta[i3:i3+3, :i]+=self.dR_dtheta[i3-3:i3, :i]  
-        #for i in self.nlist:
-        #    i3=i*3
-        #    print self.dR_dtheta[i3:i3+3,:]
-        #    print self.dRg_dtheta[i3:i3+3,:]        
-        #    print 50*"X"
         self.J[6:9,:6]=self.dR_dtheta[i3:i3+3,:]        
         self.J[:6,6:9]=self.dR_dtheta[i3:i3+3,:].T
-        FM=(np.matrix([100.0,100.0,100.0]).T, np.matrix([0.0,0.0,0.0]).T)
+        #FM=(np.matrix([100.0,100.0,100.0]).T, np.matrix([0.0,0.0,0.0]).T)
         FM=(self.thetas[6:,0], np.matrix([0.0,0.0,0.0]).T)
         tipLink=self.nlist[-1]
         self.dM.fill(0.0)
@@ -412,43 +416,7 @@ class Robot:
             self.rhs[i,0]=FMn[2]
             self.J[i,:6]=link.J[0,:]
             FM=FMn
-        print self.J[:6,:6]
-        print self.e
-        #for i in self.nlist[::-1]:
-        #    i3=i*3
-        #    i33=i3+3
-        #    link=self.J_L[i][1]
-        #    flag=link.CheckNodes()
-        #    if flag!=0:
-        #        print flag, i
-        #        break
-        #    imp=link.Im.DH()[:3,3]
-        #    FMn=link.calF(FM, i==1, self)
-        #    self.rhs[i,0]=FMn[2]
-        #    if i<tipLink:
-        #        for j in self.nlist:
-        #            self.dF[i3:i33,j]+=self.dF[i33:i33+3,j]
-        #            self.dM[i3:i33,j]+=self.dM[i33:i33+3,j]+crossX(self.relP[:,i], self.dF[i33:i33+3,j])
-        #    for j in range(i+1):
-        #        dL=crossX(self.e[:,j], self.relP[:,i])
-        #        self.dM[i3:i33,j]+=crossX(dL, FM[0])
-        #    for k in range(link.numMesh):
-        #        k3=3*k
-        #        k33=k3+3
-        #        pos_imp=link.pos[k]-imp
-        #        for j in range(i+1):
-        #            df=link.dF_dT[:,k3:k33]*crossX(self.e[:,j], pos_imp)
-        #            if j<i:
-        #                df+=link.dF_dT[:,k3:k33]*(self.dR_dtheta[i3-3:i3,j])
-        #            dl=crossX(self.e[:,j], pos_imp)
-        #            self.dM[i3:i33,j]+=crossX(dl, link.Force[:,k])
-        #            self.dM[i3:i33,j]+=crossX(pos_imp, df)#self.dF[i3:i33,j])    
-        #            self.dF[i3:i33,j]+=df#link.dF_dT[:,k3:k33]*crossX(self.e[:,j], pos_imp)
-        #    for j in self.nlist:
-        #        self.J[i,j]=self.e[:,i].T*self.dM[i3:i33,j]
-        #        if j<i: self.J[i,j]+=crossX(self.e[:,j], self.e[:,i]).T*FMn[1]
-        #    FM=FMn    
-
+        #print self.J[:6,:6]
         return (self.J, self.rhs, 1)        
 
     def SolvStatic(self, txyz, thetas=None):
@@ -809,11 +777,11 @@ class MainWindow(wx.Frame):
         self.robot.forwardK(np.matrix(a).T)
         df=self.robot.evalRhs_J()[0]    
         #dfn=self.robot.numDF(a)
-        #dfn=self.robot.numDJ(a)
+        dfn=self.robot.numDJ(a)
         self.glwin.OnDraw()
-        #print df[:6,:6]
-        #print dfn
-        #print df[:6,:6]-dfn
+        print df[:6,:6]
+        print dfn
+        print df[:6,:6]-dfn
 #if __name__=="__main__":
 #    DHR=((1, 0, 90*d2r, 1*0.2), (0, 1.0, 0.0, 1*0.2), (0, 1.0, 0.0, 1*0.2))
 #    robot=Robot(DHR)
