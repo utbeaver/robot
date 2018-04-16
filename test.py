@@ -2,6 +2,8 @@ import numpy as np
 from numpy import linalg as LA
 from OpenGL.GL import *
 from wx import *
+import time
+
 #np.set_printoptions(precision=8, formatter={'float': '{: 10.3f}'.format}, suppress=True)
 np.set_printoptions(linewidth=500)
 np.set_printoptions(precision=5, suppress=True)
@@ -121,7 +123,7 @@ class Link:
         self.last=last
         self.color=color
         self.m=1.0
-        self.scaleK=0.5
+        self.scaleK=0.00001
         self.Im=I
         self.d=paras[0]
         self.a=paras[1]
@@ -195,9 +197,9 @@ class Link:
     def GEO(self): return self.geo    
 
     def updateK(self, NK=1.0):
-        self.scaleK=NK
+        self.scaleK*=NK
 
-    def calF(self, FM, flag=False, robot=None):
+    def calF(self, FM, robot=None):
         Coffs=self.scaleK
         #if robot is not None:
 	    #print 50*"X"+self.name
@@ -348,7 +350,7 @@ class Robot:
         for dhr_ in DHR:
             I=Joint("J"+str(i), J)
             lnk=Link(i, dhr_, self.work, I.IM(), self.colors[i], i==len(DHR))
-            #lnk.updateK(i+1)
+            lnk.updateK(i)
             J=lnk.Jm
             self.J_L.append((I, lnk))
             i=i+1
@@ -412,7 +414,7 @@ class Robot:
         self.dF.fill(0.0)
         for i in self.nlist[::-1]:
             link=self.J_L[i][1]
-            FMn=link.calF(FM, i==-1, self)
+            FMn=link.calF(FM, self)
             self.rhs[i,0]=FMn[2]
             self.J[i,:6]=link.J[0,:]
             FM=FMn
@@ -422,7 +424,7 @@ class Robot:
 
     def SolvStatic(self, txyz, thetas=None):
         self.forwardK(thetas)
-        tol=1.0e-5
+        tol=5.0e-5
         maxr=1.0e10
         factor=1.0/0.75
         converged=0
@@ -451,16 +453,16 @@ class Robot:
                 DX[6:,:] *= hscale
                 self.thetas-=DX
                 i=i+1
-                if maxr<tol and i>1:
+                if (maxr<tol or maxv<tol) and i>1:
+                    self.thetas+=DX    
                     converged=1
                     break
-            print maxv, maxr, factor, i 
+            print maxv, maxr, factor, i, self.thetas[6:,0].T 
             #if i==25:
-            if factor<0.1:
+            if factor<0.01:
                 status=1
                 print rhs.T
                 break
-        self.thetas+=DX    
         print LA.cond(J)
         return (self.thetas, status)    
             
@@ -672,7 +674,7 @@ class MainWindow(wx.Frame):
         self.bx=1.0
         self.by=0.0
         self.bz=1.5
-        self.R=0.5*1.1
+        self.R=0.5*1.01
         self.w_ork=OBJ("ball.obj", self.bx, self.by, self.bz, self.R)
         self.robot=Robot(DHR, self.w_ork, colors[:6])
         self.robot.forwardK(np.matrix([0,0,0, 0,0,0]).T)
@@ -720,31 +722,33 @@ class MainWindow(wx.Frame):
         if status!=0: return
         vv=((self.bx+self.R*np.cos(0), self.by+self.R*np.sin(0), self.bz))
         vv=[]
-        num=20
-        for a in np.linspace(0, 90, num):
+        num=30
+        for a in np.linspace(0, 180, num*3):
             ang=-a*d2r
             v=[self.bx+self.R*np.cos(ang), self.by+self.R*np.sin(ang), self.bz]
             vv.append(v)
-        for v in vv[:1]: 
+        iii=0    
+        for v in vv[:]: 
             e=np.matrix(v).T
             e=e.copy()
             delta=(e-s)/float(num)
             for ii in range(num):
                 val=s+delta*(ii+1)
                 thetas, status=self.robot.SolvStatic(val)
+                print iii
+                iii=iii+1
                 self.glwin.OnDraw()
                 self.animation.append(thetas.copy())
                 if status!=0: return
             s=e.copy()    
             num=1
-        for i in self.animation: print i    
         print "finish"    
         
     def OnReplay(self, evt):
         for ani in self.animation:
-            print ani
             self.robot.forwardK(ani)
             self.glwin.OnDraw()
+            time.sleep(1)
 
     def OnMotion(self, evt):
         for i in np.linspace(-1, 1, 100)*d2r:
