@@ -56,6 +56,8 @@ class OBJ:
     def createList(self):        
         self.gl_list = glGenLists(1)
         glNewList(self.gl_list, GL_COMPILE)
+        glPushAttrib(GL_COLOR_BUFFER_BIT | GL_POLYGON_BIT)
+        glColor4f(1.0, 1.0, 1.0, 0.5)
         glFrontFace(GL_CCW)
         glPolygonMode(GL_FRONT, GL_FILL);
         for face in self.faces:
@@ -66,6 +68,7 @@ class OBJ:
                 glVertex3fv(self.vertices[vertices[i] - 1])
             glEnd()
         glPolygonMode(GL_FRONT, GL_FILL);
+        glPopAttrib()    
         glEndList()
         return self.gl_list
 
@@ -123,7 +126,7 @@ class Link:
         self.last=last
         self.color=color
         self.m=1.0
-        self.scaleK=0.00001
+        self.scaleK=0.000001
         self.Im=I
         self.d=paras[0]
         self.a=paras[1]
@@ -229,7 +232,10 @@ class Link:
         VsIn1=[]
         a2=self.r*self.r
         ms=(self.geo, self.JM())
-        ad=(self.a, self.nd)
+        temp=self.a
+        if self.nd is None:
+            temp*=0.5
+        ad=(temp, self.nd)
         force=(self.Force1, self.Force2)
         moment=(self.M1, self.M2)
         for ii in [0,1]:
@@ -350,7 +356,7 @@ class Robot:
         for dhr_ in DHR:
             I=Joint("J"+str(i), J)
             lnk=Link(i, dhr_, self.work, I.IM(), self.colors[i], i==len(DHR))
-            lnk.updateK(i)
+            #lnk.updateK(1.0/(i+1))
             J=lnk.Jm
             self.J_L.append((I, lnk))
             i=i+1
@@ -438,7 +444,7 @@ class Robot:
                 self.thetas[i,0]=ori_states[i]
             factor*=0.75
             i=0
-            while i < 25:  
+            while i < 10:  
                 J, rhs, flag=self.evalRhs_J(txyz)
                 #print LA.cond(J)
                 maxj=np.amax(np.amax(np.absolute(J[6:,:])))
@@ -458,16 +464,14 @@ class Robot:
                     converged=1
                     break
             print maxv, maxr, factor, i, self.thetas[6:,0].T 
-            #if i==25:
-            if factor<0.01:
+            if i==10:
+            #if factor<0.01:
                 status=1
                 print rhs.T
                 break
         print LA.cond(J)
         return (self.thetas, status)    
             
-        
-        
     
     def numDJ(self, thetas):
         numJ=np.matrix(np.zeros((6,6)))    
@@ -546,7 +550,9 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
         glPolygonMode(GL_FRONT, GL_FILL)
         #glEnable(GL_PROGRAM_POINT_SIZE_EXT)
         glPointSize(10)
-        
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
         self.axes=glGenLists(1)
         glNewList(self.axes, GL_COMPILE)
         glBegin(GL_LINES)
@@ -622,7 +628,7 @@ class RobotDrawingBoard(glcanvas.GLCanvas):
             if self.keychar=='x':
                 glRotate(delta*self.pn, 1,0,0)
             elif  self.keychar=='y':  
-                glRotate(delta*self.pn, 0,1,0)
+                glRotate(-delta*self.pn, 0,1,0)
             else:
                 glRotate(delta*self.pn, 0,0,1)
             glMultMatrixf(prem)   
@@ -674,8 +680,9 @@ class MainWindow(wx.Frame):
         self.bx=1.0
         self.by=0.0
         self.bz=1.5
-        self.R=0.5*1.01
-        self.w_ork=OBJ("ball.obj", self.bx, self.by, self.bz, self.R)
+        self.R=0.5*1.0
+        #self.w_ork=OBJ("ball.obj", self.bx, self.by, self.bz, self.R)
+        self.w_ork=OBJ("knot.obj", self.bx, self.by, self.bz, self.R)
         self.robot=Robot(DHR, self.w_ork, colors[:6])
         self.robot.forwardK(np.matrix([0,0,0, 0,0,0]).T)
         self.glwin=RobotDrawingBoard(self, self.robot, self.w_ork)
@@ -713,6 +720,36 @@ class MainWindow(wx.Frame):
         evt.Skip()
 
     def OnStatic(self, evt):
+        a=[0, 25*d2r, -25*d2r, 0*d2r+0, 0*d2r, 90*d2r]
+        s=self.robot.forwardK(np.matrix(a).T).copy()
+        temp,status=self.robot.SolvStatic(s)
+        self.glwin.OnDraw()
+        num=30
+        r=0.7
+        vv=[]
+        for a  in np.linspace(0, 360, 120)*d2r:
+            v=(r*np.cos(a)+s[0,0], r*np.sin(a)+s[1,0], 0+s[2,0])
+            vv.append(v)
+        iii=0    
+        for v in vv[:]: 
+            e=np.matrix(v).T
+            e=e.copy()
+            delta=(e-s)/float(num)
+            for ii in range(num):
+                val=s+delta*(ii+1)
+                thetas, status=self.robot.SolvStatic(val)
+                print iii
+                iii=iii+1
+                self.glwin.OnDraw()
+                self.animation.append(thetas.copy())
+                if status!=0: return
+            s=e.copy()    
+            num=1
+        print "finish"    
+    
+
+
+    def OnStatic1(self, evt):
         self.animation=[]
         a=[0, 0, 0, 0, 0, 0]
         a=[0, 25*d2r, -25*d2r, 0*d2r+0, 0*d2r, 90*d2r]
@@ -723,8 +760,12 @@ class MainWindow(wx.Frame):
         vv=((self.bx+self.R*np.cos(0), self.by+self.R*np.sin(0), self.bz))
         vv=[]
         num=30
-        for a in np.linspace(0, 180, num*3):
-            ang=-a*d2r
+        for a in np.linspace(0, 180*3.8/5, num*3):
+            ang=a*d2r
+            v=[self.bx+self.R*np.cos(ang), self.by+self.R*np.sin(ang), self.bz]
+            vv.append(v)
+        for a in np.linspace(180*3.8/5, -180*3.8/5, num*3):
+            ang=a*d2r
             v=[self.bx+self.R*np.cos(ang), self.by+self.R*np.sin(ang), self.bz]
             vv.append(v)
         iii=0    
@@ -748,7 +789,7 @@ class MainWindow(wx.Frame):
         for ani in self.animation:
             self.robot.forwardK(ani)
             self.glwin.OnDraw()
-            time.sleep(1)
+            time.sleep(0.05)
 
     def OnMotion(self, evt):
         for i in np.linspace(-1, 1, 100)*d2r:
