@@ -32,12 +32,14 @@ class OBJ:
         self.vertices = []
         self.normals = []
         self.faces = []
+        self.Coffs = []
         iii=0
         for filename in filenames:
             bx=bxyzs[iii][0]
             by=bxyzs[iii][1]
             bz=bxyzs[iii][2]
             scale=bxyzs[iii][3]
+            SK=bxyzs[iii][4]
             iii+=1
             start_idx=len(self.vertices)
             for line in open(filename, "r"):
@@ -48,6 +50,7 @@ class OBJ:
                     v = map(float, values[1:4])
                     v=np.matrix((bx+v[0]*scale, by+v[1]*scale, bz+v[2]*scale)).T
                     self.vertices.append(v)
+                    self.Coffs.append(SK)
                     self.normals.append(np.matrix(np.zeros((3,1))))
                 elif values[0] == 'f':
                     face = []
@@ -270,6 +273,7 @@ class Link:
             if ad[ii] is None: continue
             for i in range(self.numVertex):
                 xi=self.work.vertices[i]
+                Coffs=self.work.Coffs[i]*self.scaleK
                 ni=self.work.normals[i]
 	        dr=Txm(xi, m)
                 if dr[2,0]<-self.r or dr[2,0]>ad[ii]+self.r: continue
@@ -304,7 +308,6 @@ class Link:
                         dFlg=r_n*(b1*dotX(r,drv_dtheta)/np.sqrt(r2)*r+b2*drv_dtheta)+dr_n_dt*Flg0
                         if r2<a2_:
                             dFlg+=r_n*((-a2_/r2-1)*dotX(r,drv_dtheta)+dta/r2*drv_dtheta)*StiffK+dr_n_dt*_F
-
                         dFlg=dFlg*Coffs
                         self.dF_dT[:3,j]+=dFlg
                         self.dM_dT[:3,j]+=crossX(dL_dT-dre_dt, Flg)+crossX(L-re, dFlg)  
@@ -479,7 +482,7 @@ class Robot:
             factor*=0.75
             _thetas=[]
             i=0
-            while i < 50:  
+            while i < 10:  
                 _thetas.append(self.thetas.copy())
                 J, rhs, flag=self.evalRhs_J(txyz)
                 #print LA.cond(J)
@@ -500,7 +503,7 @@ class Robot:
                 self.thetas-=DX
             print maxf, maxr, factor, i, self.thetas[6:,0].T 
             iii+=1
-            if factor<0.01:
+            if factor<0.1:
                 status=1
                 print rhs.T
                 break
@@ -724,9 +727,9 @@ class MainWindow(wx.Frame):
         DHR=((2.0, 0.0, 90*d2r, 1*scale, 0.0), 
                 (0.0, 1.0, 0.0, 1*scale, 0.0), 
                 (0.0, 1.0, 0.0*d2r, 0.7*scale, 0.0), 
-                (0.0, 0.0, 90.0*d2r, 1*scale*0.5, 0.2),
-                (0.2, 0.0, 90*d2r, 1*scale*0.3, 0.05), 
-                (0.05, 0.10, 90*d2r, 1*scale*0.2, None)
+                (0.0, 0.0, 90.0*d2r, 1*scale*0.5, 0.0),
+                (0.0, 0.1, 90*d2r, 1*scale*0.3, 0.0), 
+                (0.0, 0.10, 90*d2r, 1*scale*0.2, None)
                 )
         #self.w_ork=OBJ("dodecahedron.obj")
         self.bx=1.0
@@ -734,7 +737,7 @@ class MainWindow(wx.Frame):
         self.bz=1.5
         self.R=0.4
         objs=("ball.obj", "ball.obj", "ball.obj")
-        self.bxyzs=((0.8, -0.6, 1.0, 0.4), (0.8, 0.6, 1.0, 0.4), (1.7, 0, 1.5, 0.4))
+        self.bxyzs=((0.8, -0.6, 1.0, 0.4, 1.0), (0.8, 0.6, 1.0, 0.4, 1.0), (1.65, 0, 1.5, 0.4, 0.6))
         self.w_ork=OBJ(objs[:], self.bxyzs[:])
         #self.w_ork=OBJ("knot.obj", self.bx, self.by, self.bz, self.R)
         self.robot=Robot(DHR, self.w_ork, colors[:6])
@@ -787,15 +790,15 @@ class MainWindow(wx.Frame):
                 self.animation.append(t)
             return
         vv=[]
-        num=[10, 20, 10]
+        num=[5, 20, 5]
         for bxyz in self.bxyzs[:2]:
             vv.append((bxyz[0]+self.R+0.001, bxyz[1], bxyz[2]))
-	bxyz=self.bxyzs[2]    
-        vv.append((bxyz[0], bxyz[1]+self.R+0.001, bxyz[2]))
-	for ang in np.linspace(90, 270, 30)*d2r:
-		v=(bxyz[0]+self.R*np.cos(ang), bxyz[1]+self.R*np.sin(ang), bxyz[2])
-		vv.append(v)
-		num.append(1)
+	#bxyz=self.bxyzs[2]    
+        #vv.append((bxyz[0], bxyz[1]+self.R+0.001, bxyz[2]))
+	#for ang in np.linspace(90, 270, 30)*d2r:
+	#	v=(bxyz[0]+self.R*np.cos(ang), bxyz[1]+self.R*np.sin(ang), bxyz[2])
+	#	vv.append(v)
+	#	num.append(1)
 	    
         iii=0    
 	jj=0
